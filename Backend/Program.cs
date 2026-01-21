@@ -23,7 +23,9 @@ builder.Services.AddCors(options =>
         policy =>
         {
             // 這裡設定允許的前端網址，Vite 預設通常是 http://localhost:5173
-            policy.WithOrigins("http://localhost:5173") 
+            policy.WithOrigins("http://localhost:5173",
+            "https://account-book-app-chi.vercel.app"
+            ) 
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         });
@@ -36,11 +38,11 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
+// if (app.Environment.IsDevelopment())
+// {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+// }
 
 // app.UseHttpsRedirection();
 
