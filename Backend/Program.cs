@@ -24,7 +24,7 @@ builder.Services.AddCors(options =>
         {
             // 這裡設定允許的前端網址，Vite 預設通常是 http://localhost:5173
             policy.WithOrigins("http://localhost:5173",
-            "https://account-book-app-chi.vercel.app"
+            "https://account-book-app-sigma.vercel.app"
             ) 
                   .AllowAnyHeader()
                   .AllowAnyMethod();
