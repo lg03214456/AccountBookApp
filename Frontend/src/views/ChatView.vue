@@ -5,7 +5,8 @@ import axios from 'axios';
 // ⚠️ 關鍵：你的後端網址
 // 請確認 Port 號 (5050) 跟你的 dotnet watch run 顯示的一樣
 // 假設你的 Controller 路由是 [HttpPost("chat")]，網址就要長這樣：
-const backendUrl = 'http://localhost:5050/api/gemini/chat'; 
+const baseUrl = import.meta.env.VITE_APP_URL;
+const backendUrl = `${baseUrl}/api/gemini/chat`; 
 
 const userMessage = ref('');       // 使用者輸入
 const chatHistory = ref<{ role: string, text: string }[]>([]);     // 聊天紀錄
