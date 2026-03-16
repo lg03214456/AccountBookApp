@@ -15,9 +15,10 @@ onMounted(() => {
 const { signIn, signOut, isAuthenticated, fetchUserInfo } = useLogto();
 const userData = ref<any>(null);
 
-// ⭐ 測試建議：先寫死本地網址，確保 Logto Console 的 Redirect URI 也是這個
-const baseUrl = "http://localhost:5173";
 
+// ⭐ 正確抓取環境變數：請確保 .env 檔案中有 VITE_APP_URL
+
+const baseUrl = import.meta.env.VITE_APP_URL || "http://localhost:5173";
 const handleLogin = async () => {
   console.log("🚀 準備執行登入跳轉...");
   try {
