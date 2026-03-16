@@ -4,9 +4,7 @@ import { useLogto } from "@logto/vue";
 import DevTestMenu from "./components/DevTestMenu.vue";
 import { useTheme } from "./composables/useTheme";
 
-// 1. 初始化主題
 const { initTheme } = useTheme();
-// 🟢 新增：Loading 狀態，防止登入時畫面閃爍
 const isLoading = ref(true);
 
 onMounted(() => {
@@ -25,7 +23,6 @@ const handleLogout = () => {
   signOut(`${baseUrl}/`);
 };
 
-// 🟢 優化登入監控：加入 Loading 判斷
 watch(
   isAuthenticated,
   async (newVal) => {
@@ -39,10 +36,9 @@ watch(
     } else {
       userData.value = null;
     }
-    // 給一點點緩衝時間讓畫面更平順
     setTimeout(() => {
       isLoading.value = false;
-    }, 300);
+    }, 500);
   },
   { immediate: true },
 );
@@ -50,227 +46,190 @@ watch(
 
 <template>
   <div v-if="isLoading" class="loading-overlay">
-    <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--app-primary)"></i>
+    <div class="loader-content">
+      <i class="pi pi-spin pi-spinner" style="font-size: 2.5rem; color: var(--app-primary)"></i>
+      <p>正在同步雲端資料...</p>
+    </div>
   </div>
 
-  <div v-else class="app-layout page-wrapper">
-    <header class="top-nav">
-      <div class="logo-section">
-        <i class="pi pi-wallet logo-icon"></i>
-        <span class="logo-text hide-on-mobile">Bookkeeping</span>
-      </div>
+  <div v-else class="app-layout">
+    <header v-if="isAuthenticated" class="top-nav">
+      <div class="nav-container">
+        <div class="logo-section">
+          <i class="pi pi-wallet logo-icon"></i>
+          <span class="logo-text hide-on-mobile">Bookkeeping</span>
+        </div>
 
-      <nav class="nav-links">
-        <RouterLink to="/" class="nav-item">
-          <i class="pi pi-home"></i>
-          <span class="nav-text">記帳本</span>
-        </RouterLink>
+        <nav class="nav-links">
+          <RouterLink to="/" class="nav-item">
+            <i class="pi pi-home"></i>
+            <span class="nav-text">首頁</span>
+          </RouterLink>
+          <RouterLink to="/book" class="nav-item">
+            <i class="pi pi-list"></i>
+            <span class="nav-text">記帳本</span>
+          </RouterLink>
+          <span class="divider">|</span>
+          <RouterLink to="/chat" class="nav-item">
+            <i class="pi pi-comments"></i>
+            <span class="nav-text">AI 助理</span>
+          </RouterLink>
+          <span class="divider">|</span>
+          <RouterLink to="/settings" class="nav-item">
+            <i class="pi pi-cog"></i>
+            <span class="nav-text">設定</span>
+          </RouterLink>
+        </nav>
 
-        <span class="divider">|</span>
-
-        <RouterLink to="/chat" class="nav-item">
-          <i class="pi pi-comments"></i>
-          <span class="nav-text">AI 助理</span>
-        </RouterLink>
-
-        <span class="divider">|</span>
-
-        <RouterLink to="/settings" class="nav-item">
-          <i class="pi pi-cog"></i>
-          <span class="nav-text">設定</span>
-        </RouterLink>
-      </nav>
-
-      <div class="auth-section">
-        <span
-          class="user-greeting hide-on-mobile"
-          v-if="userData && isAuthenticated"
-        >
-          Hi, {{ userData.name || userData.username }}
-        </span>
-
-        <template v-if="!isAuthenticated">
-          <button @click="handleLogin" class="auth-btn login-btn">登入</button>
-        </template>
-        <template v-else>
+        <div class="auth-section">
+          <span class="user-greeting hide-on-mobile" v-if="userData">
+            Hi, {{ userData.name || userData.username }}
+          </span>
           <button @click="handleLogout" class="auth-btn logout-btn">
             <i class="pi pi-sign-out"></i>
             <span class="hide-on-mobile">登出</span>
           </button>
           <DevTestMenu />
-        </template>
+        </div>
       </div>
     </header>
 
     <main class="main-content">
-      <RouterView />
+      <div class="content-container">
+        <template v-if="isAuthenticated">
+          <RouterView />
+        </template>
+
+        <div v-else class="guest-container">
+          <div class="welcome-card">
+            <div class="icon-circle">
+              <i class="pi pi-wallet"></i>
+            </div>
+            <h1>雲端智慧記帳本</h1>
+            <p>隨時隨地記錄您的每一筆開支，掌握財務自由</p>
+            <button @click="handleLogin" class="landing-login-btn">
+              立即開始使用
+              <i class="pi pi-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 </template>
 
 <style scoped>
-/* 🟢 Loading 樣式 */
-.loading-overlay {
-  height: 100vh;
-  width: 100vw;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: #f8faff; /* 建議與主題背景色一致 */
-}
-
+/* 🟢 基礎佈局 */
 .app-layout {
-  font-family: "Inter", sans-serif;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #f8faff; /* 確保背景色填滿 */
 }
 
-/* 🟢 Logo 樣式 */
+/* 🔵 Top Nav 佈局：背景橫跨 100%，內容置中 */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: center; /* ⭐ 關鍵：讓內部的容器水平置中 */
+}
+
+.nav-container {
+  width: 100%;
+  max-width: 1200px; /* ⭐ 設定電腦版最大寬度 */
+  padding: 0.8rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 🔵 主內容區佈局 */
+.main-content {
+  flex-grow: 1;
+  width: 100%;
+  display: flex;
+  justify-content: center; /* ⭐ 讓內容容器置中 */
+}
+
+.content-container {
+  width: 100%;
+  max-width: 1200px; /* ⭐ 與導覽列對齊 */
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+/* 🟢 Logo & 導航項 */
 .logo-section {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
 }
-.logo-icon {
-  font-size: 1.5rem;
-  color: var(--app-primary);
-}
-.logo-text {
-  font-weight: 800;
-  font-size: 1.2rem;
-  letter-spacing: -0.5px;
-  color: #1e293b;
-}
+.logo-icon { font-size: 1.5rem; color: var(--app-primary); }
+.logo-text { font-weight: 800; font-size: 1.2rem; color: #1e293b; }
 
-/* 🔵 導覽列佈局 (鎖死寬度防溢出) */
-.top-nav {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
+.nav-links { display: flex; align-items: center; gap: 1rem; }
+.nav-item { 
+  text-decoration: none; color: #495057; font-weight: 500;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.nav-item.router-link-exact-active { color: var(--app-primary); font-weight: bold; }
+.divider { color: #adb5bd; }
+
+/* 🟡 驗證按鈕 */
+.auth-section { display: flex; align-items: center; gap: 0.8rem; flex-shrink: 0; }
+.auth-btn { padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; border: none; display: flex; align-items: center; gap: 5px; }
+.login-btn { background-color: var(--app-primary); color: white; }
+.logout-btn { background-color: transparent; color: #ef4444; border: 1px solid #fee2e2; }
+
+/* 🔴 未登入引導頁樣式 */
+.guest-container {
+  height: 70vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.welcome-card {
+  background: white;
+  padding: 3rem 2rem;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  max-width: 450px;
   width: 100%;
-  max-width: 100vw;
-  box-sizing: border-box; /* ⭐ 關鍵：確保內邊距不撐爆寬度 */
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.8rem 1.5rem;
-  background-color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+.icon-circle {
+  width: 80px; height: 80px; background: var(--app-primary); color: white;
+  border-radius: 50%; display: flex; justify-content: center; align-items: center;
+  font-size: 2.5rem; margin: 0 auto 1.5rem;
+}
+.landing-login-btn {
+  margin-top: 2rem; background: var(--app-primary); color: white; border: none;
+  padding: 1rem 2rem; border-radius: 12px; font-weight: bold; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; width: 100%; justify-content: center;
 }
 
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-shrink: 1; 
-  min-width: 0;
+/* 🟢 Loading 樣式 */
+.loading-overlay {
+  height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; background: #f8faff;
 }
 
-.nav-item {
-  text-decoration: none;
-  color: #495057;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-  white-space: nowrap; /* ⭐ 關鍵：文字不換行 */
-}
-
-.nav-item.router-link-exact-active {
-  color: var(--app-primary);
-  font-weight: bold;
-}
-
-.divider {
-  color: #adb5bd;
-}
-
-/* 🟡 驗證區域 */
-.auth-section {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  flex-shrink: 0;
-}
-
-.user-greeting {
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.auth-btn {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  border: none;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: opacity 0.2s;
-}
-
-.login-btn {
-  background-color: var(--app-primary);
-  color: white;
-}
-
-.logout-btn {
-  background-color: transparent;
-  color: #ef4444;
-  border: 1px solid #fee2e2;
-}
-
-.main-content {
-  padding: 1rem;
-  flex-grow: 1;
-  width: 100%;
-  max-width: 100vw;
-  box-sizing: border-box;
-  overflow-x: hidden; /* ⭐ 核心：禁止主內容區左右滑動 */
-}
-
-/* ⭐⭐⭐ 響應式優化：手機版 ⭐⭐⭐ */
+/* ⭐⭐⭐ 響應式優化 ⭐⭐⭐ */
 @media (max-width: 768px) {
-  .nav-text, .hide-on-mobile {
-    display: none;
-  }
-
-  .nav-links {
-    gap: 0.8rem;
-  }
-
-  .top-nav {
-    padding: 0.8rem 0.8rem; /* 手機版邊距縮小 */
-  }
-
-  .nav-item i {
-    font-size: 1.2rem;
-  }
+  .nav-text, .hide-on-mobile { display: none; }
+  .nav-container, .content-container { padding: 0.8rem 1rem; }
+  .nav-links { gap: 0.8rem; }
 }
 
-/* 針對 400px 以下的超窄螢幕 */
 @media (max-width: 400px) {
-  .divider {
-    display: none; 
-  }
-  .nav-links {
-    gap: 1.2rem; /* 分隔線消失後，圖示間距加大方便點擊 */
-  }
-  .top-nav {
-    padding: 0.8rem 0.5rem;
-  }
-}
-
-/* 極端窄螢幕防護 */
-@media (max-width: 320px) {
-  .logo-section {
-    display: none;
-  }
+  .divider { display: none; }
+  .nav-links { gap: 1.2rem; }
 }
 </style>
