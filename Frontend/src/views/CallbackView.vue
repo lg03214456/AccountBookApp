@@ -1,25 +1,18 @@
-<script setup lang="ts">
-import { useHandleSignInCallback } from '@logto/vue';
-import router from '../router';
-
-const { isLoading } = useHandleSignInCallback(() => {
-  // 登入成功後，跳轉回首頁
-  router.push('/');
-});
-</script>
-
 <template>
-  <div class="callback-container">
-    <p v-if="isLoading">正在驗證身分，請稍候...</p>
+  <div style="text-align: center; margin-top: 50px;">
+    <h2>登入處理中，請稍候...</h2>
   </div>
 </template>
 
-<style scoped>
-.callback-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  font-size: 1.2rem;
-}
-</style>
+<script setup lang="ts">
+import { useHandleSignInCallback } from '@logto/vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
+// Logto 會自動處理網址上的授權碼
+const { isLoading } = useHandleSignInCallback(() => {
+  // 處理成功後，自動跳轉回首頁 '/'
+  router.push('/');
+});
+</script>

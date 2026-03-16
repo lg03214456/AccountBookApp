@@ -4,6 +4,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AccountingView from '../views/AccountingView.vue'
 import ChatView from '../views/ChatView.vue'
 import CallbackView from '../views/CallbackView.vue'
+import SettingsView from '../views/SettingsView.vue'
 
 const router = createRouter({
   // 使用 HTML5 的歷史模式 (網址不會有 # 符號)
@@ -24,7 +25,12 @@ const router = createRouter({
       path: '/callback',
       name: 'callback',
       component: CallbackView
-    }
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView
+    },
   ]
 })
 

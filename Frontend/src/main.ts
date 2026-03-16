@@ -1,39 +1,49 @@
+import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 
+// Logto 相關
+import { createLogto, type LogtoConfig, UserScope } from '@logto/vue';
 
-import { createLogto, type LogtoConfig } from '@logto/vue';
-import { createApp } from 'vue'
-import './style.css'
+// PrimeVue 相關
 import PrimeVue from 'primevue/config';
 import Aura from '@primevue/themes/aura';
 import 'primeicons/primeicons.css';
 
-const config: LogtoConfig = {
+// 全域樣式
+import './style.css'
+import './assets/main.css'; 
+
+// 1. 統一 Logto 設定
+const logtoConfig: LogtoConfig = {
   endpoint: 'https://y4spdd.logto.app/',
   appId: '9xw4sbd3iorkwgkzr4pxi',
-  // ⚠️ 關鍵：告訴 Logto 我們要呼叫這支 API
   resources: ['https://accountbook.api'], 
-  
-  // 這是之前設定的 scopes，保持預設即可
-  scopes: ['email', 'profile'],
+  scopes: [
+    UserScope.Email,
+    UserScope.Profile
+  ],
 };
 
 const app = createApp(App)
-app.use(createLogto, config);
+
+// 2. 註冊外掛程式 (注意順序)
+app.use(createLogto, logtoConfig);
 app.use(router)
 
-// 2. 註冊 PrimeVue
+// 3. 註冊 PrimeVue
 app.use(PrimeVue, {
-    theme: {
-        preset: Aura,
-        options: {
-            darkModeSelector: '.my-app-dark',
-        }
+  theme: {
+    preset: Aura,
+    options: {
+      // 這裡維持你設定的 dark 選擇器
+      darkModeSelector: '.my-app-dark',
     }
+  }
 });
-// 印出目前的模式與變數
-console.log('目前模式:', import.meta.env.MODE);
-console.log('目前 API 網址:', import.meta.env.VITE_API_BASE_URL);
-app.mount('#app')
 
+// 印出目前的模式與變數 (除錯用)
+console.log('🚀 目前模式:', import.meta.env.MODE);
+console.log('🌐 目前 API 網址:', import.meta.env.VITE_API_BASE_URL);
+
+app.mount('#app')
