@@ -6,6 +6,9 @@ import { useTheme } from "./composables/useTheme";
 
 // 1. 初始化主題
 const { initTheme } = useTheme();
+// 🟢 新增：Loading 狀態，防止登入時畫面閃爍
+const isLoading = ref(true);
+
 onMounted(() => {
   initTheme();
 });
@@ -22,9 +25,11 @@ const handleLogout = () => {
   signOut(`${baseUrl}/`);
 };
 
+// 🟢 優化登入監控：加入 Loading 判斷
 watch(
   isAuthenticated,
   async (newVal) => {
+    isLoading.value = true;
     if (newVal) {
       try {
         userData.value = await fetchUserInfo();
@@ -34,13 +39,21 @@ watch(
     } else {
       userData.value = null;
     }
+    // 給一點點緩衝時間讓畫面更平順
+    setTimeout(() => {
+      isLoading.value = false;
+    }, 300);
   },
   { immediate: true },
 );
 </script>
 
 <template>
-  <div class="app-layout page-wrapper">
+  <div v-if="isLoading" class="loading-overlay">
+    <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--app-primary)"></i>
+  </div>
+
+  <div v-else class="app-layout page-wrapper">
     <header class="top-nav">
       <div class="logo-section">
         <i class="pi pi-wallet logo-icon"></i>
@@ -96,8 +109,21 @@ watch(
 </template>
 
 <style scoped>
+/* 🟢 Loading 樣式 */
+.loading-overlay {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f8faff; /* 建議與主題背景色一致 */
+}
+
 .app-layout {
   font-family: "Inter", sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 🟢 Logo 樣式 */
@@ -105,6 +131,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 .logo-icon {
   font-size: 1.5rem;
@@ -117,11 +144,14 @@ watch(
   color: #1e293b;
 }
 
-/* 🔵 導覽列與連結 */
+/* 🔵 導覽列佈局 (鎖死寬度防溢出) */
 .top-nav {
   position: sticky;
   top: 0;
   z-index: 1000;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box; /* ⭐ 關鍵：確保內邊距不撐爆寬度 */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -136,8 +166,8 @@ watch(
   display: flex;
   align-items: center;
   gap: 1rem;
-  flex-shrink: 1; /* ⭐ 允許在空間不足時縮小 */
-  min-width: 0;   /* 解決 flex 子元素不縮小的問題 */
+  flex-shrink: 1; 
+  min-width: 0;
 }
 
 .nav-item {
@@ -148,6 +178,7 @@ watch(
   align-items: center;
   gap: 6px;
   transition: all 0.2s;
+  white-space: nowrap; /* ⭐ 關鍵：文字不換行 */
 }
 
 .nav-item.router-link-exact-active {
@@ -163,8 +194,8 @@ watch(
 .auth-section {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  flex-shrink: 0; /* 登入按鈕區域不縮小，保持完整 */
+  gap: 0.8rem;
+  flex-shrink: 0;
 }
 
 .user-greeting {
@@ -181,6 +212,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 5px;
+  transition: opacity 0.2s;
 }
 
 .login-btn {
@@ -196,59 +228,49 @@ watch(
 
 .main-content {
   padding: 1rem;
+  flex-grow: 1;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+  overflow-x: hidden; /* ⭐ 核心：禁止主內容區左右滑動 */
 }
 
-/* ⭐⭐⭐ 響應式關鍵：手機版調整 ⭐⭐⭐ */
+/* ⭐⭐⭐ 響應式優化：手機版 ⭐⭐⭐ */
 @media (max-width: 768px) {
-  /* 1. 隱藏導航列的文字，只留圖示 */
-  .nav-text {
+  .nav-text, .hide-on-mobile {
     display: none;
   }
 
-  /* 2. 隱藏標記為 hide-on-mobile 的所有元素 (如問候語、登出文字、Logo文字) */
-  .hide-on-mobile {
-    display: none;
-  }
-
-  /* 3. 調整間距讓圖示在小畫面不擁擠 */
   .nav-links {
     gap: 0.8rem;
   }
 
-  .nav-item i {
-    font-size: 1.2rem; /* 手機版讓圖示稍微大一點好點擊 */
-  }
-
-  .auth-section {
-    gap: 0.5rem;
-  }
-
   .top-nav {
-    padding: 0.8rem 0.5rem; /* 手機版內邊距縮小，留更多空間給內容 */
-    width: 100%;
-    max-width: 100vw; /* 鎖死寬度 */
-    box-sizing: border-box; /* 確保 padding 不會往外撐 */
+    padding: 0.8rem 0.8rem; /* 手機版邊距縮小 */
   }
 
-  .divider {
-    margin: 0 2px;
+  .nav-item i {
+    font-size: 1.2rem;
   }
 }
 
-/* 針對超小螢幕 (如 iPhone SE) 進一步壓縮 */
+/* 針對 400px 以下的超窄螢幕 */
 @media (max-width: 400px) {
   .divider {
-    display: none; /* 隱藏分隔線，讓圖示更靠近 */
+    display: none; 
   }
   .nav-links {
-    gap: 0.5rem; /* 連結間距縮小 */
+    gap: 1.2rem; /* 分隔線消失後，圖示間距加大方便點擊 */
+  }
+  .top-nav {
+    padding: 0.8rem 0.5rem;
   }
 }
 
-@media (max-width: 350px) {
-  /* 針對極窄手機（如舊款 iPhone） */
+/* 極端窄螢幕防護 */
+@media (max-width: 320px) {
   .logo-section {
-    display: none; /* 甚至可以連 Logo 都藏起來，只留功能圖示 */
+    display: none;
   }
 }
 </style>

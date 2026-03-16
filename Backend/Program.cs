@@ -98,6 +98,7 @@ app.UseRouting();
 // CORS 必須在驗證之前
 app.UseCors("AllowVueApp");
 
+
 // 先認人 (Authentication)，再查權限 (Authorization)
 app.UseAuthentication();
 app.UseAuthorization();

@@ -6,6 +6,7 @@ import ChatView from '../views/ChatView.vue'
 import CallbackView from '../views/CallbackView.vue'
 import SettingsView from '../views/SettingsView.vue'
 
+
 const router = createRouter({
   // 使用 HTML5 的歷史模式 (網址不會有 # 符號)
   history: createWebHistory(import.meta.env.BASE_URL),
