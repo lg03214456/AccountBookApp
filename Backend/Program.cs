@@ -13,6 +13,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+
 builder.Services.AddScoped<Backend.Services.RecordService>();
 builder.Services.AddHttpClient();
 

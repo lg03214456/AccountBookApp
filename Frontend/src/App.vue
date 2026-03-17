@@ -4,7 +4,6 @@ import { useLogto } from "@logto/vue";
 import DevTestMenu from "./components/DevTestMenu.vue";
 import { useTheme } from "./composables/useTheme";
 
-// 1. 初始化主題設定
 const { initTheme } = useTheme();
 const isLoading = ref(true);
 
@@ -14,202 +13,204 @@ onMounted(() => {
 
 const { signIn, signOut, isAuthenticated, fetchUserInfo } = useLogto();
 const userData = ref<any>(null);
-
-
-// ⭐ 正確抓取環境變數：請確保 .env 檔案中有 VITE_APP_URL
-
 const baseUrl = import.meta.env.VITE_APP_URL || "http://localhost:5173";
+
 const handleLogin = async () => {
-  console.log("🚀 準備執行登入跳轉...");
-  try {
-    // 使用 .prevent 加上這裡的 await，雙重確保不重載
-    await signIn(`${baseUrl}/callback`);
-  } catch (error) {
-    console.error("❌ 登入失敗：", error);
-    alert("跳轉失敗，請檢查 F12 控制台錯誤訊息");
-  }
+  await signIn(`${baseUrl}/callback`);
 };
 
 const handleLogout = () => {
   signOut(baseUrl);
 };
 
-// 2. 監控登入狀態並處理 Loading 體驗
 watch(
   isAuthenticated,
   async (newVal) => {
     isLoading.value = true;
     if (newVal) {
-      try {
-        userData.value = await fetchUserInfo();
-      } catch (error) {
-        console.error("無法取得使用者資料", error);
-      }
+      try { userData.value = await fetchUserInfo(); } 
+      catch (error) { console.error(error); }
     } else {
       userData.value = null;
     }
-    // 增加緩衝時間，讓畫面轉換更平順
-    setTimeout(() => {
-      isLoading.value = false;
-    }, 500);
+    setTimeout(() => { isLoading.value = false; }, 500);
   },
   { immediate: true },
 );
+
+const handleQuickAdd = () => {
+  console.log("開啟快速記帳表單");
+};
 </script>
 
 <template>
   <div v-if="isLoading" class="loading-overlay">
     <div class="loader-content">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2.5rem; color: var(--app-primary)"></i>
-      <p>正在同步雲端資料...</p>
+      <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--app-primary)"></i>
+      <p>資料讀取中...</p>
     </div>
   </div>
 
-  <div v-else class="app-layout page-wrapper">
-    <header class="top-nav">
+  <div v-else class="app-layout">
+    <header v-if="isAuthenticated" class="top-nav">
       <div class="nav-container">
-        <div class="logo-section">
+        <RouterLink to="/" class="logo-section">
           <i class="pi pi-wallet logo-icon"></i>
-          <span class="logo-text hide-on-mobile">Bookkeeping</span>
-        </div>
-
-        <nav class="nav-links">
-          <RouterLink to="/" class="nav-item">
-            <i class="pi pi-home"></i>
-            <span class="nav-text">首頁</span>
-          </RouterLink>
-
-          <template v-if="isAuthenticated">
-            <RouterLink to="/book" class="nav-item">
-              <i class="pi pi-list"></i>
-              <span class="nav-text">記帳本</span>
-            </RouterLink>
-            <span class="divider">|</span>
-            <RouterLink to="/chat" class="nav-item">
-              <i class="pi pi-comments"></i>
-              <span class="nav-text">AI 助理</span>
-            </RouterLink>
-            <span class="divider">|</span>
-            <RouterLink to="/settings" class="nav-item">
-              <i class="pi pi-cog"></i>
-              <span class="nav-text">設定</span>
-            </RouterLink>
-          </template>
-        </nav>
+          <span class="logo-text">Bookkeeping</span>
+        </RouterLink>
 
         <div class="auth-section">
-          <template v-if="!isAuthenticated">
-            <button 
-              type="button" 
-              @click.stop.prevent="handleLogin" 
-              class="auth-btn login-btn"
-            >
-              登入
-            </button>
-          </template>
-
-          <template v-else>
-            <span class="user-greeting hide-on-mobile" v-if="userData">
-              Hi, {{ userData.name || userData.username }}
-            </span>
-            <button type="button" @click.prevent="handleLogout" class="auth-btn logout-btn">
-              <i class="pi pi-sign-out"></i>
-              <span class="hide-on-mobile">登出</span>
-            </button>
-            <DevTestMenu />
-          </template>
+          <RouterLink to="/chat" class="top-chat-btn">
+            <i class="pi pi-comments"></i>
+            <span class="hide-on-mobile">AI 助理</span>
+          </RouterLink>
+          
+          <button type="button" @click="handleLogout" class="auth-btn logout-btn">
+            <i class="pi pi-sign-out"></i>
+          </button>
+          <DevTestMenu />
         </div>
       </div>
     </header>
 
-    <main class="main-content">
+    <main class="main-content" :class="{ 'with-footer': isAuthenticated }">
       <div class="content-container">
         <RouterView />
-        
-        <div v-if="!isAuthenticated && $route.path === '/'" class="guest-hint">
-          <i class="pi pi-lock"></i>
-          <p>請先登入以使用雲端記帳功能</p>
+        <div v-if="!isAuthenticated" class="guest-screen">
+          <i class="pi pi-lock-open mb-4" style="font-size: 3rem; opacity: 0.2"></i>
+          <h2>歡迎使用雲端記帳</h2>
+          <button @click="handleLogin" class="auth-btn login-btn mt-4">登入系統</button>
         </div>
       </div>
     </main>
+
+    <footer v-if="isAuthenticated" class="app-bottom-nav">
+      <div class="footer-grid">
+        <RouterLink to="/" class="footer-item">
+          <i class="pi pi-book"></i>
+          <span>帳本</span>
+        </RouterLink>
+
+        <RouterLink to="/accounts" class="footer-item">
+          <i class="pi pi-briefcase"></i>
+          <span>帳戶</span>
+        </RouterLink>
+
+        <div class="footer-item center-btn" @click="handleQuickAdd">
+          <div class="add-icon-box">
+            <i class="pi pi-plus"></i>
+          </div>
+          <span class="add-text">記一筆</span>
+        </div>
+
+        <RouterLink to="/stats" class="footer-item">
+          <i class="pi pi-chart-pie"></i>
+          <span>分析</span>
+        </RouterLink>
+
+        <RouterLink to="/settings" class="footer-item">
+          <i class="pi pi-cog"></i>
+          <span>設定</span>
+        </RouterLink>
+      </div>
+    </footer>
   </div>
 </template>
 
 <style scoped>
-/* 基礎排版 */
-.app-layout {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+.app-layout { min-height: 100vh; display: flex; flex-direction: column; }
 
+/* 🟢 頂部導航 (維持淺色/毛玻璃) */
 .top-nav {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
+  position: sticky; top: 0; z-index: 1000;
+  background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  display: flex; justify-content: center;
+}
+.nav-container { width: 100%; max-width: 1200px; padding: 0.6rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+
+/* 🟠 底部導航 (關鍵：移除 Media Query 隱藏，改用變數) */
+.app-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
   width: 100%;
-  background-color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  height: 70px;
+  /* ⭐ 這裡改用變數，會跟隨主題改變 */
+  background-color: var(--app-footer-bg, #121212); 
+  border-top: 1px solid var(--app-border, #2c2c2e);
   display: flex;
   justify-content: center;
+  z-index: 2000;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.nav-container {
+.footer-grid {
   width: 100%;
-  max-width: 1200px;
-  display: flex;
-  justify-content: space-between;
+  max-width: 600px; /* 在電腦上限制寬度，避免太散 */
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   align-items: center;
-  padding: 0.8rem 1.5rem;
 }
 
-.nav-links {
+.footer-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1.2rem;
-}
-
-.nav-item {
   text-decoration: none;
-  color: #495057;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: 0.2s;
+  /* ⭐ 文字顏色也跟隨主題 */
+  color: var(--app-text-secondary, #8e8e93); 
+  font-size: 0.7rem;
+  gap: 4px;
 }
 
-.nav-item.router-link-exact-active {
-  color: var(--app-primary);
-  font-weight: bold;
+/* 啟動狀態：使用你的主題主色 */
+.footer-item.router-link-exact-active {
+  color: var(--app-primary, #ff9f0a);
 }
 
-/* Logo 樣式 */
-.logo-section { display: flex; align-items: center; gap: 10px; }
-.logo-icon { font-size: 1.5rem; color: var(--app-primary); }
+.footer-item i { font-size: 1.3rem; }
+
+/* 🟡 橘色加號按鈕樣式 */
+.add-icon-box {
+  width: 48px; height: 48px;
+  background: var(--app-primary, #ff9f0a);
+  border-radius: 14px;
+  display: flex; justify-content: center; align-items: center;
+  margin-top: -18px; /* 向上突出的靈魂 */
+  box-shadow: 0 4px 15px rgba(255, 159, 10, 0.3);
+  transition: transform 0.2s;
+}
+.add-icon-box:active { transform: scale(0.9); }
+.add-icon-box i { color: #000; font-size: 1.5rem !important; font-weight: bold; }
+.add-text { color: var(--app-primary, #ff9f0a); font-weight: bold; }
+
+/* 🔵 主內容區間距 */
+.main-content { display: flex; justify-content: center; flex-grow: 1; }
+.content-container { width: 100%; max-width: 1200px; padding: 1.5rem; }
+
+/* 確保不被底部遮擋 */
+.with-footer {
+  padding-bottom: 90px;
+}
+
+/* UI 組件樣式 */
+.logo-section { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.logo-icon { color: var(--app-primary); font-size: 1.5rem; }
 .logo-text { font-weight: 800; font-size: 1.2rem; color: #1e293b; }
 
-/* 驗證區域 */
-.auth-section { display: flex; align-items: center; gap: 1rem; }
-.auth-btn { padding: 0.5rem 1.2rem; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
-.login-btn { background: var(--app-primary); color: white; }
-.logout-btn { background: transparent; color: #ef4444; border: 1px solid #fee2e2; }
-
-/* 內容區 */
-.main-content { display: flex; justify-content: center; flex-grow: 1; }
-.content-container { width: 100%; max-width: 1200px; padding: 2rem 1.5rem; }
-
-.guest-hint { text-align: center; margin-top: 5rem; opacity: 0.3; }
-.guest-hint i { font-size: 3rem; margin-bottom: 1rem; }
-
-.loading-overlay {
-  height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; background: #f8faff;
+.top-chat-btn {
+  display: flex; align-items: center; gap: 6px; text-decoration: none;
+  background: rgba(var(--app-primary-rgb), 0.1); color: var(--app-primary);
+  padding: 0.4rem 0.8rem; border-radius: 12px; font-weight: 600;
 }
 
-/* 響應式 */
+.auth-section { display: flex; align-items: center; gap: 0.8rem; }
+.auth-btn { cursor: pointer; border: none; background: transparent; }
+.logout-btn { color: #ef4444; }
+.login-btn { background: var(--app-primary); color: white; padding: 0.6rem 1.5rem; border-radius: 8px; }
+
 @media (max-width: 768px) {
-  .nav-text, .hide-on-mobile { display: none; }
-  .nav-container { padding: 0.8rem 1rem; }
+  .hide-on-mobile { display: none; }
 }
 </style>
