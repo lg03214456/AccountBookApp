@@ -4,7 +4,7 @@ import { useLogto } from "@logto/vue";
 import DevTestMenu from "./components/DevTestMenu.vue";
 import { useTheme } from "./composables/useTheme";
 
-// 1. 初始化
+// 1. 初始化主題與狀態
 const { initTheme } = useTheme();
 const isLoading = ref(true);
 
@@ -14,8 +14,6 @@ onMounted(() => {
 
 const { signIn, signOut, isAuthenticated, fetchUserInfo } = useLogto();
 const userData = ref<any>(null);
-
-// 環境變數
 const baseUrl = import.meta.env.VITE_APP_URL || "http://localhost:5173";
 
 const handleLogin = async () => {
@@ -26,7 +24,7 @@ const handleLogout = () => {
   signOut(baseUrl);
 };
 
-// 監控登入與 Loading
+// 2. 監控登入與資料抓取
 watch(
   isAuthenticated,
   async (newVal) => {
@@ -51,8 +49,8 @@ watch(
 <template>
   <div v-if="isLoading" class="loading-overlay">
     <div class="loader-content">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2rem; color: var(--app-primary)"></i>
-      <p>雲端同步中...</p>
+      <i class="pi pi-spin pi-spinner" style="font-size: 2.5rem; color: var(--app-primary)"></i>
+      <p>資料同步中...</p>
     </div>
   </div>
 
@@ -77,7 +75,7 @@ watch(
           <span class="user-greeting hide-on-mobile" v-if="userData">
             Hi, {{ userData.name || userData.username }}
           </span>
-          <button type="button" @click="handleLogout" class="auth-btn logout-btn">
+          <button type="button" @click="handleLogout" class="auth-btn logout-btn" title="登出">
             <i class="pi pi-sign-out"></i>
           </button>
           <DevTestMenu />
@@ -88,17 +86,19 @@ watch(
     <main class="main-content" :class="{ 'has-footer': isAuthenticated }">
       <div class="content-container">
         <RouterView />
+        
         <div v-if="!isAuthenticated" class="guest-gate">
-          <i class="pi pi-lock mb-4" style="font-size: 3rem; opacity: 0.1"></i>
+          <i class="pi pi-lock mb-4" style="font-size: 4rem; opacity: 0.1"></i>
           <h2>歡迎使用雲端記帳本</h2>
-          <button @click="handleLogin" class="auth-btn login-btn mt-4">登入系統</button>
+          <p class="opacity-60">請先登入以開啟完整功能</p>
+          <button @click="handleLogin" class="auth-btn login-btn mt-6">登入系統</button>
         </div>
       </div>
     </main>
 
     <footer v-if="isAuthenticated" class="app-bottom-nav">
       <div class="footer-grid">
-        <RouterLink to="/book" class="footer-item">
+        <RouterLink to="/" class="footer-item">
           <i class="pi pi-book"></i>
           <span>帳本</span>
         </RouterLink>
@@ -122,17 +122,44 @@ watch(
   </div>
 </template>
 
+<style>
+:root {
+  /* ☀️ 預設淺色模式變數 */
+  --app-bg: #f8faff;
+  --app-header-bg: rgba(255, 255, 255, 0.85);
+  --app-footer-bg: #ffffff;
+  --app-footer-text: #64748b;
+  --app-footer-border: rgba(0, 0, 0, 0.05);
+}
+
+.dark-mode {
+  /* 🌙 深色模式變數 (當您的 useTheme 觸發時切換) */
+  --app-bg: #0f172a;
+  --app-header-bg: rgba(30, 41, 59, 0.8);
+  --app-footer-bg: #1e293b;
+  --app-footer-text: #94a3b8;
+  --app-footer-border: rgba(255, 255, 255, 0.1);
+  --app-text: #f1f5f9;
+}
+</style>
+
 <style scoped>
-/* 基礎排版 */
-.app-layout { min-height: 100vh; display: flex; flex-direction: column; }
+.app-layout { 
+  min-height: 100vh; 
+  display: flex; 
+  flex-direction: column; 
+  background-color: var(--app-bg);
+  transition: background-color 0.3s ease;
+}
 
 /* 🟢 頂部樣式 */
 .top-nav {
   position: sticky; top: 0; z-index: 1000;
-  background: var(--app-header-bg, rgba(255, 255, 255, 0.85));
+  background: var(--app-header-bg);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--app-border, rgba(0,0,0,0.05));
+  border-bottom: 1px solid var(--app-footer-border);
   display: flex; justify-content: center;
+  transition: background-color 0.3s;
 }
 .nav-container {
   width: 100%; max-width: 1200px; padding: 0.6rem 1.2rem;
@@ -144,20 +171,21 @@ watch(
 .logo-icon { color: var(--app-primary); font-size: 1.5rem; }
 .logo-text { font-weight: 800; font-size: 1.2rem; }
 
-/* AI 助理樣式 */
+/* AI 助理 */
 .ai-assistant-btn {
   display: flex; align-items: center; gap: 8px; text-decoration: none;
-  background: rgba(var(--app-primary-rgb, 100, 100, 255), 0.1);
-  color: var(--app-primary); padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600;
+  background: rgba(var(--app-primary-rgb), 0.1);
+  color: var(--app-primary); padding: 0.5rem 1.2rem; border-radius: 20px; font-weight: 700;
 }
 
-/* 🟠 底部導覽列 (全平台、隨主題變色) */
+/* 🟠 底部導覽列 (關鍵：主題連動) */
 .app-bottom-nav {
   position: fixed; bottom: 0; left: 0; width: 100%; height: 65px;
-  background-color: var(--app-footer-bg, #121212);
-  border-top: 1px solid var(--app-border, #2c2c2e);
+  background-color: var(--app-footer-bg);
+  border-top: 1px solid var(--app-footer-border);
   display: flex; justify-content: center; z-index: 2000;
   padding-bottom: env(safe-area-inset-bottom);
+  transition: all 0.3s ease;
 }
 
 .footer-grid {
@@ -168,12 +196,14 @@ watch(
 
 .footer-item {
   display: flex; flex-direction: column; align-items: center;
-  text-decoration: none; color: var(--app-text-secondary, #8e8e93);
+  text-decoration: none; 
+  color: var(--app-footer-text);
   font-size: 0.75rem; gap: 4px; transition: 0.2s;
 }
 
 .footer-item.router-link-exact-active {
-  color: var(--app-primary, #ff9f0a);
+  color: var(--app-primary);
+  font-weight: bold;
 }
 
 .footer-item i { font-size: 1.4rem; }
@@ -182,15 +212,15 @@ watch(
 .main-content { display: flex; justify-content: center; flex-grow: 1; }
 .content-container { width: 100%; max-width: 1200px; padding: 1.5rem; }
 
-.has-footer { padding-bottom: 85px; }
+.has-footer { padding-bottom: 90px; } /* 預留足夠空間給底部導航 */
 
 /* 其他 UI */
 .auth-section { display: flex; align-items: center; gap: 1rem; }
-.auth-btn { cursor: pointer; border: none; background: transparent; padding: 0.4rem; }
+.auth-btn { cursor: pointer; border: none; background: transparent; padding: 0.4rem; font-size: 1.2rem; }
 .logout-btn { color: #ef4444; }
-.login-btn { background: var(--app-primary); color: white; padding: 0.6rem 1.5rem; border-radius: 8px; font-weight: bold; }
-.loading-overlay { height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; }
-.guest-gate { text-align: center; padding-top: 20vh; opacity: 0.4; }
+.login-btn { background: var(--app-primary); color: white; padding: 0.7rem 2rem; border-radius: 12px; font-weight: bold; }
+.loading-overlay { height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; background: var(--app-bg); }
+.guest-gate { text-align: center; padding-top: 20vh; }
 
 @media (max-width: 768px) {
   .hide-on-mobile { display: none; }
