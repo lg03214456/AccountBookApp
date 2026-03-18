@@ -1,20 +1,23 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import DatePicker from 'primevue/datepicker'; // PrimeVue v4 命名為 DatePicker
+import DatePicker from 'primevue/datepicker';
 import Card from 'primevue/card';
 import Tag from 'primevue/tag';
+import Button from 'primevue/button';
+import Dialog from 'primevue/dialog'; // 引入對話框
 
-// 1. 選取的日期，預設為今天
+// 1. 狀態控管
 const selectedDate = ref(new Date());
+const isAddDialogVisible = ref(false); // 控制彈窗顯示
 
-// 2. 模擬的記帳資料 (之後你會從 .NET API 抓取)
+// 2. 模擬資料
 const transactions = ref([
   { id: 1, date: '2026/03/18', category: '餐飲', amount: -150, note: '午餐便當' },
   { id: 2, date: '2026/03/18', category: '交通', amount: -30, note: '公車' },
   { id: 3, date: '2026/03/17', category: '薪資', amount: 50000, note: '3月薪水' },
 ]);
 
-// 3. 格式化選取日期為字串 (YYYY/MM/DD)
+// 3. 格式化日期
 const formattedDate = computed(() => {
   return selectedDate.value.toLocaleDateString('zh-TW', {
     year: 'numeric',
@@ -23,7 +26,7 @@ const formattedDate = computed(() => {
   });
 });
 
-// 4. 根據選取的日期過濾出當天的帳目
+// 4. 過濾當天帳目
 const dailyTransactions = computed(() => {
   return transactions.value.filter(item => item.date === formattedDate.value);
 });
@@ -32,6 +35,11 @@ const dailyTransactions = computed(() => {
 const dailyTotal = computed(() => {
   return dailyTransactions.value.reduce((acc, cur) => acc + cur.amount, 0);
 });
+
+// 打開新增彈窗
+const openAddDialog = () => {
+  isAddDialogVisible.value = true;
+};
 </script>
 
 <template>
@@ -41,7 +49,6 @@ const dailyTotal = computed(() => {
         v-model="selectedDate" 
         inline 
         class="custom-calendar"
-        showWeek
       />
     </section>
 
@@ -79,78 +86,98 @@ const dailyTotal = computed(() => {
         </div>
       </div>
     </section>
+
+    <button class="fab-btn" @click="openAddDialog">
+      <i class="pi pi-plus"></i>
+      <span class="fab-text">記一筆</span>
+    </button>
+
+    <Dialog 
+      v-model:visible="isAddDialogVisible" 
+      modal 
+      header="新增帳目" 
+      :style="{ width: '90vw', maxWidth: '450px' }"
+      class="add-transaction-dialog"
+    >
+      <div class="p-4 text-center">
+        <p>正在為 {{ formattedDate }} 建立新紀錄...</p>
+        <div class="py-6 opacity-30">
+           <i class="pi pi-pencil" style="font-size: 3rem"></i>
+           <p>表單開發中</p>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="取消" icon="pi pi-times" text @click="isAddDialogVisible = false" />
+        <Button label="儲存" icon="pi pi-check" @click="isAddDialogVisible = false" autofocus />
+      </template>
+    </Dialog>
   </div>
 </template>
 
 <style scoped>
 .accounting-container {
   display: grid;
-  grid-template-columns: 1fr 1fr; /* 電腦版左右平分 */
+  grid-template-columns: 1fr 1fr;
   gap: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  position: relative; /* 讓 FAB 可以相對於此定位 */
 }
 
-/* 🟢 行事曆樣式調整 */
-.calendar-section {
-  display: flex;
-  justify-content: center;
-}
-
+/* 🟢 行事曆樣式 */
 :deep(.custom-calendar) {
   width: 100% !important;
   border: none;
-  background: var(--app-card-bg);
+  background: var(--app-card-bg, #fff);
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-  padding: 1rem;
 }
 
-/* 🔵 詳情清單樣式 */
-.details-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
+/* 🔵 明細清單樣式 */
+.details-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.item-card { margin-bottom: 0.8rem; border-radius: 12px; }
+.category-icon { 
+  width: 40px; height: 40px; background: #f0f4ff; color: #3b82f6; 
+  border-radius: 10px; display: flex; justify-content: center; align-items: center; font-weight: bold;
 }
-
-.date-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0;
-}
-
-.item-card {
-  margin-bottom: 0.8rem;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.03);
-}
-
-.category-icon {
-  width: 40px; height: 40px;
-  background: var(--app-primary-faded);
-  color: var(--app-primary);
-  border-radius: 10px;
-  display: flex; justify-content: center; align-items: center;
-  font-weight: bold;
-}
-
 .amount { font-weight: 800; font-size: 1.1rem; }
 .income { color: #22c55e; }
 .expense { color: #ef4444; }
 
-.empty-state {
-  text-align: center;
-  padding: 4rem 0;
-  opacity: 0.3;
+/* 🟠 懸浮按鈕 (FAB) 樣式 */
+.fab-btn {
+  position: fixed;
+  bottom: 100px; /* 避開底部導航列 */
+  right: 30px;
+  background: #ff9f0a; /* 橘色 */
+  color: black;
+  border: none;
+  padding: 1rem 1.5rem;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: bold;
+  box-shadow: 0 8px 25px rgba(255, 159, 10, 0.4);
+  cursor: pointer;
+  z-index: 100;
+  transition: transform 0.2s, background 0.2s;
 }
-.empty-state i { font-size: 3rem; margin-bottom: 1rem; }
 
-/* ⭐ 響應式：手機版變上下排列 */
-@media (max-width: 992px) {
-  .accounting-container {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
+.fab-btn:hover {
+  transform: scale(1.05);
+  background: #ffb340;
 }
+
+.fab-btn i { font-size: 1.2rem; }
+
+/* 響應式：手機版 */
+@media (max-width: 992px) {
+  .accounting-container { grid-template-columns: 1fr; gap: 1.5rem; }
+  .fab-btn { bottom: 90px; right: 20px; }
+  .fab-text { display: none; } /* 手機版只留圖示，更簡潔 */
+  .fab-btn { padding: 1.2rem; border-radius: 50%; }
+}
+
+.empty-state { text-align: center; padding: 4rem 0; opacity: 0.3; }
 </style>
