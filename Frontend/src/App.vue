@@ -5,7 +5,8 @@ import DevTestMenu from "./components/DevTestMenu.vue";
 import { useTheme } from "./composables/useTheme";
 
 // 1. 初始化主題與狀態
-const { initTheme } = useTheme();
+// 🟢 這裡要解構出 isDarkMode 和 toggleDarkMode 供畫面上使用
+const { initTheme, isDarkMode, toggleDarkMode } = useTheme();
 const isLoading = ref(true);
 
 onMounted(() => {
@@ -24,7 +25,6 @@ const handleLogout = () => {
   signOut(baseUrl);
 };
 
-// 2. 監控登入與資料抓取
 watch(
   isAuthenticated,
   async (newVal) => {
@@ -60,22 +60,25 @@ watch(
         <RouterLink to="/" class="logo-link">
           <div class="logo-section">
             <i class="pi pi-wallet logo-icon"></i>
-            <span class="logo-text">Bookkeeping</span>
+            <span class="logo-text">Cloud Bookkeeping</span>
           </div>
         </RouterLink>
 
-        <div class="top-center-area">
+        <div class="top-right-actions">
+          <button @click="toggleDarkMode" class="icon-btn theme-btn" :title="isDarkMode ? '切換日間' : '切換深夜'">
+            <i :class="['pi', isDarkMode ? 'pi-sun' : 'pi-moon']"></i>
+          </button>
+          
           <RouterLink to="/chat" class="ai-assistant-btn">
             <i class="pi pi-comments"></i>
             <span class="hide-on-mobile">AI 助理</span>
           </RouterLink>
-        </div>
 
-        <div class="auth-section">
-          <span class="user-greeting hide-on-mobile" v-if="userData">
-            Hi, {{ userData.name || userData.username }}
-          </span>
-          <button type="button" @click="handleLogout" class="auth-btn logout-btn" title="登出">
+          <div class="user-profile hide-on-mobile" v-if="userData">
+            <span class="user-name">Hi, {{ userData.name || 'User' }}</span>
+          </div>
+
+          <button @click="handleLogout" class="icon-btn logout-btn" title="登出">
             <i class="pi pi-sign-out"></i>
           </button>
           <DevTestMenu />
@@ -86,7 +89,6 @@ watch(
     <main class="main-content" :class="{ 'has-footer': isAuthenticated }">
       <div class="content-container">
         <RouterView />
-        
         <div v-if="!isAuthenticated" class="guest-gate">
           <i class="pi pi-lock mb-4" style="font-size: 4rem; opacity: 0.1"></i>
           <h2>歡迎使用雲端記帳本</h2>
@@ -100,22 +102,22 @@ watch(
       <div class="footer-grid">
         <RouterLink to="/" class="footer-item">
           <i class="pi pi-book"></i>
-          <span>帳本</span>
+          <span class="link-text">帳本</span>
         </RouterLink>
 
         <RouterLink to="/accounts" class="footer-item">
           <i class="pi pi-briefcase"></i>
-          <span>帳戶</span>
+          <span class="link-text">帳戶</span>
         </RouterLink>
 
         <RouterLink to="/stats" class="footer-item">
           <i class="pi pi-chart-pie"></i>
-          <span>分析</span>
+          <span class="link-text">分析</span>
         </RouterLink>
 
         <RouterLink to="/settings" class="footer-item">
           <i class="pi pi-cog"></i>
-          <span>設定</span>
+          <span class="link-text">設定</span>
         </RouterLink>
       </div>
     </footer>
@@ -123,8 +125,8 @@ watch(
 </template>
 
 <style>
+/* ... :root 和 .dark-mode 維持不變 ... */
 :root {
-  /* ☀️ 預設淺色模式變數 */
   --app-bg: #f8faff;
   --app-header-bg: rgba(255, 255, 255, 0.85);
   --app-footer-bg: #ffffff;
@@ -133,7 +135,6 @@ watch(
 }
 
 .dark-mode {
-  /* 🌙 深色模式變數 (當您的 useTheme 觸發時切換) */
   --app-bg: #0f172a;
   --app-header-bg: rgba(30, 41, 59, 0.8);
   --app-footer-bg: #1e293b;
@@ -145,60 +146,54 @@ watch(
 
 <style scoped>
 .app-layout { 
-  min-height: 100vh; 
+  height: 100vh;          /* 強制等於螢幕高度 */
   display: flex; 
-  flex-direction: column; 
+  flex-direction: column; /* 垂直排列：Header -> Main -> Footer */
+  overflow: hidden;       /* 防止整個網頁出現雙滾輪 */
   background-color: var(--app-bg);
-  transition: background-color 0.3s ease;
 }
 
-/* 🟢 頂部樣式 */
+/* 🟢 頂部 Navbar：固定不縮放 */
 .top-nav {
-  position: sticky; top: 0; z-index: 1000;
+  flex-shrink: 0;         /* 確保 Header 不會因為內容多而被壓縮 */
+  position: relative;     /* 不再需要 sticky，因為父層已經 flex 鎖定了 */
+  z-index: 1000;
   background: var(--app-header-bg);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--app-footer-border);
-  display: flex; justify-content: center;
-  transition: background-color 0.3s;
 }
+
 .nav-container {
-  width: 100%; max-width: 1200px; padding: 0.6rem 1.2rem;
+  width: 100%;
+  max-width: 1200px; /* 電腦版限制最大寬度 */
+  padding: 0.6rem 1.2rem;
   display: flex; justify-content: space-between; align-items: center;
 }
 
-.logo-link { text-decoration: none; color: inherit; }
-.logo-section { display: flex; align-items: center; gap: 8px; }
-.logo-icon { color: var(--app-primary); font-size: 1.5rem; }
-.logo-text { font-weight: 800; font-size: 1.2rem; }
-
-/* AI 助理 */
-.ai-assistant-btn {
-  display: flex; align-items: center; gap: 8px; text-decoration: none;
-  background: rgba(var(--app-primary-rgb), 0.1);
-  color: var(--app-primary); padding: 0.5rem 1.2rem; border-radius: 20px; font-weight: 700;
+.top-right-actions {
+  display: flex; align-items: center; gap: 1rem;
 }
 
-/* 🟠 底部導覽列 (關鍵：主題連動) */
+/* 🟠 底部 Footer：固定在最下方 */
 .app-bottom-nav {
-  position: fixed; bottom: 0; left: 0; width: 100%; height: 65px;
+  flex-shrink: 0;         /* 確保 Footer 不會被擠壓 */
   background-color: var(--app-footer-bg);
   border-top: 1px solid var(--app-footer-border);
-  display: flex; justify-content: center; z-index: 2000;
-  padding-bottom: env(safe-area-inset-bottom);
+  width: 100%;
   transition: all 0.3s ease;
 }
 
 .footer-grid {
-  width: 100%; max-width: 600px;
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  align-items: center;
+  width: 100%;
+  max-width: 1200px;
 }
 
 .footer-item {
-  display: flex; flex-direction: column; align-items: center;
+  display: flex;
+  align-items: center;
   text-decoration: none; 
   color: var(--app-footer-text);
-  font-size: 0.75rem; gap: 4px; transition: 0.2s;
+  transition: 0.2s;
 }
 
 .footer-item.router-link-exact-active {
@@ -206,23 +201,71 @@ watch(
   font-weight: bold;
 }
 
-.footer-item i { font-size: 1.4rem; }
+/* ⭐ 響應式佈局 (RWD) 核心 */
 
-/* 🔵 內容區間距 */
-.main-content { display: flex; justify-content: center; flex-grow: 1; }
-.content-container { width: 100%; max-width: 1200px; padding: 1.5rem; }
 
-.has-footer { padding-bottom: 90px; } /* 預留足夠空間給底部導航 */
+/* ⭐ 響應式佈局補充 (RWD) */
 
-/* 其他 UI */
-.auth-section { display: flex; align-items: center; gap: 1rem; }
-.auth-btn { cursor: pointer; border: none; background: transparent; padding: 0.4rem; font-size: 1.2rem; }
-.logout-btn { color: #ef4444; }
-.login-btn { background: var(--app-primary); color: white; padding: 0.7rem 2rem; border-radius: 12px; font-weight: bold; }
-.loading-overlay { height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; background: var(--app-bg); }
-.guest-gate { text-align: center; padding-top: 20vh; }
+@media (min-width: 769px) {
+  /* 電腦版：Footer 內容橫向分佈 */
+  .app-bottom-nav {
+    padding: 1rem 0;
+  }
+  .footer-grid {
+    display: flex;
+    justify-content: space-around;
+    max-width: 1200px;
+  }
+  .footer-item { flex-direction: row; gap: 10px; font-size: 1rem; }
+}
 
 @media (max-width: 768px) {
-  .hide-on-mobile { display: none; }
+  /* 手機版：Footer 固定高度 */
+  .app-bottom-nav {
+    height: 65px;
+    padding-bottom: env(safe-area-inset-bottom); /* 避開 iPhone 底部白條 */
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+  /* ⚡ 手機版不再需要 has-footer 的 padding，因為 flex 佈局已經自動避開了 */
 }
+/* 其他通用樣式 */
+/* 🔵 中間主內容區：關鍵滾動設定 */
+.main-content { 
+  flex: 1;                /* 自動撐開，佔據 Header 與 Footer 之間的所有空間 */
+  overflow-y: auto;       /* ⚡ 當內容太長時，自動出現垂直滾輪 */
+  -webkit-overflow-scrolling: touch; /* 讓手機版滑動更順暢 (滑動慣性) */
+  display: flex;
+  justify-content: center;
+}
+
+.content-container { width: 100%; max-width: 1200px; padding: 1.5rem; }
+
+.icon-btn { 
+  background: transparent; border: none; cursor: pointer; 
+  font-size: 1.2rem; color: var(--app-footer-text); 
+  display: flex; align-items: center; justify-content: center;
+  padding: 8px; border-radius: 50%;
+}
+.theme-btn:hover { background: rgba(var(--app-primary-rgb), 0.1); }
+.pi-sun { color: #f59e0b; }
+.pi-moon { color: #818cf8; }
+
+.logo-link { text-decoration: none; color: inherit; }
+.logo-section { display: flex; align-items: center; gap: 8px; }
+.logo-icon { color: var(--app-primary); font-size: 1.5rem; }
+.logo-text { font-weight: 800; transition: font-size 0.3s; }
+
+.ai-assistant-btn {
+  display: flex; align-items: center; gap: 8px; text-decoration: none;
+  background: rgba(var(--app-primary-rgb), 0.1);
+  color: var(--app-primary); padding: 0.5rem 1.2rem; border-radius: 20px; font-weight: 700;
+}
+
+.logout-btn { color: #ef4444; }
+.login-btn { background: var(--app-primary); color: white; padding: 0.7rem 2rem; border-radius: 12px; font-weight: bold; }
+.loading-overlay { height: 100vh; display: flex; justify-content: center; align-items: center; background: var(--app-bg); }
+.guest-gate { text-align: center; padding-top: 20vh; }
 </style>

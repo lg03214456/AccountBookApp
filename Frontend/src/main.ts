@@ -36,8 +36,8 @@ app.use(PrimeVue, {
   theme: {
     preset: Aura,
     options: {
-      // 這裡維持你設定的 dark 選擇器
-      darkModeSelector: '.my-app-dark',
+      // 🟢 修改這裡，確保與 CSS 類別一致
+      darkModeSelector: '.dark-mode',
     }
   }
 });
