@@ -1,82 +1,116 @@
+/* --- 1. 全域變數定義 --- */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
+  /* 主題變數 - 由 useTheme.ts 控制 */
+  --app-primary: #00668c;
+  --app-primary-rgb: 0, 102, 140;
+  --app-bg: #f8faff;
+  --app-bg-image: none;
+  --app-text: #0f172a;
+  --app-card-bg: rgba(255, 255, 255, 0.85);
+  --app-header-bg: rgba(255, 255, 255, 0.8);
+  --app-footer-bg: #ffffff;
+  --app-footer-text: #64748b;
+  --app-footer-border: rgba(0, 0, 0, 0.08);
+
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+/* --- 2. 深色模式覆蓋 --- */
+.dark-mode {
+  --app-bg: #0f172a;
+  --app-bg-image: none !important;
+  --app-text: #f8fafc;
+  --app-card-bg: rgba(30, 41, 59, 0.7);
+  --app-header-bg: rgba(15, 23, 42, 0.8);
+  --app-footer-bg: #1e293b;
+  --app-footer-text: #94a3b8;
+  --app-footer-border: rgba(255, 255, 255, 0.1);
 }
 
+/* --- 3. 核心佈局地基 --- */
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
+  padding: 0;
   min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-.card {
-  padding: 2em;
+  width: 100%;
+  
+  /* 背景連動與固定 (解決切換閃爍) */
+  background-color: var(--app-bg);
+  background-image: var(--app-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed; 
+  background-repeat: no-repeat;
+  
+  color: var(--app-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  display: block; 
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  min-height: 100vh;
+  background: transparent;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* --- 4. ⭐ 內容標準容器 (解決忽寬忽窄的關鍵) --- */
+.view-wrapper {
+  width: 100%;
+  max-width: 1000px; /* 這裡設定全 App 一致的最大寬度 */
+  margin: 0 auto;    /* 置中 */
+  padding: 1.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-height: calc(100vh - 145px); /* 扣除 Header 與 Footer 高度 */
 }
+
+/* 統一的頁面標題區塊 */
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
+}
+
+.view-title {
+  font-size: 1.85rem;
+  font-weight: 900;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+/* --- 5. 響應式縮放規則 --- */
+@media (max-width: 1024px) {
+  .view-wrapper { max-width: 92%; }
+}
+
+@media (max-width: 768px) {
+  .view-wrapper { 
+    max-width: 100%; 
+    padding: 1.2rem;
+    padding-bottom: 100px; /* 避開底部導覽列 */
+  }
+  .view-title { font-size: 1.6rem; }
+}
+
+/* --- 6. 通用組件 --- */
+.theme-card {
+  background: var(--app-card-bg) !important;
+  border: 1px solid var(--app-footer-border) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px !important;
+  color: var(--app-text) !important;
+}
+
+/* Tailwind 注入 */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

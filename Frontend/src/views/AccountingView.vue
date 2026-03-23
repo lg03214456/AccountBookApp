@@ -6,17 +6,22 @@ import Tag from 'primevue/tag';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
+import InputNumber from 'primevue/inputnumber';
 
-// 1. 狀態控管
+// --- 1. 狀態控管 ---
 const isAddDialogVisible = ref(false);
+const isEditing = ref(false);
+const editingId = ref<number | null>(null);
 const selectedDate = ref(new Date());
 
+// 模擬資料庫 (建議之後移到 Store 或 API)
 const transactions = ref([
   { id: 1, date: '2026-03-19', category: '飲食', type: 'Expense', amount: -150, note: '午餐便當', account: '錢包' },
+  { id: 2, date: '2026-03-19', category: '交通', type: 'Expense', amount: -30, note: '公車', account: '錢包' },
 ]);
 
-// 2. 暫存資料
-const amountStr = ref('0.00');
+// --- 2. 暫存資料與帳戶設定 ---
+const amount = ref<number | null>(0); 
 const newEntry = ref({
   category: '飲食',
   note: '',
@@ -24,7 +29,6 @@ const newEntry = ref({
   account: '錢包' 
 });
 
-// ⭐ 帳戶二級連動資料
 const accountCategories = [
   { id: 'cash', name: '現金', icon: 'pi-wallet', color: '#f59e0b' },
   { id: 'card', name: '信用卡', icon: 'pi-credit-card', color: '#6366f1' },
@@ -37,22 +41,71 @@ const subAccountMap = {
   bank: ['玉山銀行', '國泰世華', '郵局', '富邦銀行']
 };
 
-// 2. ⭐ 定義型別：這會從 subAccountMap 的 key 自動推導出 'cash' | 'card' | 'bank'
 type AccountType = keyof typeof subAccountMap;
-
-// 3. 宣告變數時指定型別
 const activeAccountType = ref<AccountType>('cash');
 
-// 處理總類切換
-// 4. 處理切換函式
+// --- 3. 核心功能函式 ---
+
+const prepareNewEntry = () => {
+  isEditing.value = false;
+  editingId.value = null;
+  amount.value = 0;
+  newEntry.value = { category: '飲食', note: '', type: 'Expense', account: '錢包' };
+  activeAccountType.value = 'cash';
+  isAddDialogVisible.value = true;
+};
+
+const openEditDialog = (item: any) => {
+  isEditing.value = true;
+  editingId.value = item.id;
+  amount.value = Math.abs(item.amount);
+  newEntry.value = { category: item.category, note: item.note, type: item.type, account: item.account };
+  
+  for (const [key, list] of Object.entries(subAccountMap)) {
+    if (list.includes(item.account)) {
+      activeAccountType.value = key as AccountType;
+      break;
+    }
+  }
+  isAddDialogVisible.value = true;
+};
+
 const selectAccountType = (typeId: string) => {
-  // 這裡使用類型斷言 (Type Assertion) 告訴 TS：這個字串就是 AccountType 之一
   const id = typeId as AccountType;
   activeAccountType.value = id;
-  
-  // 這樣就不會報錯了，因為 TS 知道 subAccountMap[id] 一定存在
   newEntry.value.account = subAccountMap[id][0];
 };
+
+const saveTransaction = () => {
+  if (!amount.value || amount.value === 0) return;
+
+  const finalAmount = newEntry.value.type === 'Expense' ? -amount.value : amount.value;
+  const transactionData = {
+    id: isEditing.value ? editingId.value : Date.now(),
+    date: formattedDate.value,
+    category: newEntry.value.category,
+    type: newEntry.value.type,
+    amount: finalAmount,
+    note: newEntry.value.note,
+    account: newEntry.value.account
+  };
+
+  if (isEditing.value) {
+    const idx = transactions.value.findIndex(t => t.id === editingId.value);
+    if (idx !== -1) transactions.value[idx] = transactionData as any;
+  } else {
+    transactions.value.push(transactionData as any);
+  }
+  isAddDialogVisible.value = false;
+};
+
+const formattedDate = computed(() => {
+  const d = selectedDate.value;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+});
+
+const dailyTransactions = computed(() => transactions.value.filter(item => item.date === formattedDate.value));
+const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => acc + cur.amount, 0));
 
 const categories = [
   { name: '飲食', icon: 'pi-utensils', color: '#dbeafe', iconColor: '#3b82f6' },
@@ -60,83 +113,80 @@ const categories = [
   { name: '交通', icon: 'pi-car', color: '#ecfdf5', iconColor: '#10b981' },
   { name: '其他', icon: 'pi-ellipsis-h', color: '#f5f3ff', iconColor: '#8b5cf6' },
 ];
-
-// 3. 數字鍵盤
-const appendNum = (n: string) => {
-  if (amountStr.value === '0.00') amountStr.value = n;
-  else if (n === '.' && amountStr.value.includes('.')) return;
-  else amountStr.value += n;
-};
-const deleteNum = () => {
-  if (amountStr.value.length > 1) amountStr.value = amountStr.value.slice(0, -1);
-  else amountStr.value = '0.00';
-};
-
-// 4. 儲存與格式化
-const formattedDate = computed(() => {
-  const d = selectedDate.value;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-});
-
-const saveTransaction = () => {
-  const finalAmt = parseFloat(amountStr.value);
-  if (finalAmt === 0) return;
-
-  transactions.value.push({
-    id: Date.now(),
-    date: formattedDate.value,
-    category: newEntry.value.category,
-    type: newEntry.value.type,
-    amount: newEntry.value.type === 'Expense' ? -finalAmt : finalAmt,
-    note: newEntry.value.note,
-    account: newEntry.value.account
-  });
-
-  amountStr.value = '0.00';
-  newEntry.value.note = '';
-  isAddDialogVisible.value = false;
-};
-
-const dailyTransactions = computed(() => transactions.value.filter(item => item.date === formattedDate.value));
-const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => acc + cur.amount, 0));
 </script>
 
 <template>
-  <div class="accounting-container fade-in">
-    <section class="calendar-section"><DatePicker v-model="selectedDate" inline class="custom-calendar" /></section>
+  <div class="view-wrapper fade-in">
     
-    <section class="details-section">
-      <div class="details-header mb-4 flex justify-content-between align-items-center">
-        <h2 class="date-title m-0">{{ formattedDate }}</h2>
-        <Tag :severity="dailyTotal >= 0 ? 'success' : 'danger'" class="p-2 px-3 border-round-xl">
-          今日損益: {{ dailyTotal.toLocaleString() }}
-        </Tag>
-      </div>
+    <header class="view-header">
+      <h1 class="view-title">日常記帳</h1>
+      <Tag :severity="dailyTotal >= 0 ? 'success' : 'danger'" class="p-2 px-3 border-round-xl shadow-1">
+        今日損益: {{ dailyTotal.toLocaleString() }}
+      </Tag>
+    </header>
 
-      <div class="transaction-list-wrapper">
-        <Card v-for="item in dailyTransactions" :key="item.id" class="item-card shadow-1 mb-3">
+    <main class="view-content accounting-grid">
+      
+      <section class="calendar-section">
+        <Card class="theme-card calendar-card shadow-sm">
           <template #content>
-            <div class="flex justify-content-between align-items-center">
-              <div class="flex align-items-center gap-3">
-                <div class="category-icon">{{ item.category[0] }}</div>
-                <div>
-                  <div class="font-bold">{{ item.category }}</div>
-                  <div class="text-xs opacity-60">{{ item.account }} | {{ item.note || '無備註' }}</div>
-                </div>
-              </div>
-              <div :class="['amount-text', item.amount >= 0 ? 'income' : 'expense']">
-                {{ item.amount >= 0 ? '+' : '' }}{{ item.amount.toLocaleString() }}
-              </div>
-            </div>
+            <DatePicker v-model="selectedDate" inline class="custom-calendar" />
           </template>
         </Card>
-      </div>
-    </section>
+      </section>
+      
+      <section class="details-section">
+        <div class="section-label mb-3">
+          <i class="pi pi-calendar-plus mr-2"></i>
+          <span>{{ formattedDate }} 明細</span>
+        </div>
 
-    <button class="fab-btn" @click="isAddDialogVisible = true"><i class="pi pi-plus"></i><span class="fab-text">快速記帳</span></button>
+        <div class="transaction-list-wrapper">
+          <div v-if="dailyTransactions.length === 0" class="empty-state">
+            <i class="pi pi-inbox mb-3 text-4xl opacity-20"></i>
+            <p>這天還沒有紀錄喔</p>
+          </div>
 
-    <Dialog v-model:visible="isAddDialogVisible" modal :showHeader="false" :style="{ width: '100vw', maxWidth: '420px' }" class="custom-dialog">
+          <Card v-for="item in dailyTransactions" :key="item.id" 
+                class="item-card shadow-1 mb-3 theme-card" @click="openEditDialog(item)">
+            <template #content>
+              <div class="flex justify-content-between align-items-center">
+                <div class="flex align-items-center gap-3">
+                  <div class="category-icon-box">
+                    {{ item.category[0] }}
+                  </div>
+                  <div>
+                    <div class="font-bold text-lg">{{ item.category }}</div>
+                    <div class="text-xs opacity-60 font-medium">{{ item.account }} | {{ item.note || '無備註' }}</div>
+                  </div>
+                </div>
+                <div :class="['amount-text', item.amount >= 0 ? 'income' : 'expense']">
+                  {{ item.amount >= 0 ? '+' : '' }}{{ item.amount.toLocaleString() }}
+                </div>
+              </div>
+            </template>
+          </Card>
+        </div>
+      </section>
+    </main>
+
+    <button class="fab-btn" @click="prepareNewEntry">
+      <i class="pi pi-plus"></i>
+      <span class="fab-text">快速記帳</span>
+    </button>
+
+    <Dialog 
+      v-model:visible="isAddDialogVisible" 
+      modal 
+      :showHeader="false" 
+      :dismissableMask="true"
+      :style="{ width: '92vw', maxWidth: '420px' }"
+      class="custom-dialog"
+    >
       <div class="transaction-panel p-4">
+        <p class="text-center font-bold opacity-30 text-xs mb-3 uppercase tracking-tighter">
+          {{ isEditing ? 'Edit Transaction' : 'New Transaction' }}
+        </p>
         
         <div class="toggle-container mb-5" :class="newEntry.type === 'Expense' ? 'border-expense' : 'border-income'">
           <button @click="newEntry.type = 'Expense'" class="type-btn" :class="{ 'btn-expense-active': newEntry.type === 'Expense' }">支出</button>
@@ -144,9 +194,17 @@ const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => a
         </div>
 
         <div class="amount-area text-center mb-5">
-          <div class="flex justify-content-center align-items-baseline gap-2">
-            <span class="text-3xl font-bold" :class="newEntry.type === 'Expense' ? 'text-red-500' : 'text-green-500'">$</span>
-            <span class="text-6xl font-black tracking-tighter">{{ amountStr }}</span>
+          <div class="flex justify-content-center align-items-center gap-2">
+            <span class="text-3xl font-black" :class="newEntry.type === 'Expense' ? 'text-red-500' : 'text-green-500'">$</span>
+            <InputNumber 
+              v-model="amount" 
+              mode="decimal" 
+              :useGrouping="true" 
+              placeholder="0"
+              class="huge-amount-wrapper"
+              inputClass="huge-amount-input"
+              autofocus
+            />
           </div>
         </div>
 
@@ -155,7 +213,9 @@ const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => a
           <div class="flex justify-content-between">
             <div v-for="cat in categories" :key="cat.name" class="cat-item" 
                  :class="{ 'active': newEntry.category === cat.name }" @click="newEntry.category = cat.name">
-              <div class="cat-circle" :style="{ backgroundColor: cat.color }"><i :class="['pi', cat.icon]" :style="{ color: cat.iconColor }"></i></div>
+              <div class="cat-circle" :style="{ backgroundColor: cat.color }">
+                <i :class="['pi', cat.icon]" :style="{ color: cat.iconColor }"></i>
+              </div>
               <span class="text-xs mt-2 font-bold">{{ cat.name }}</span>
             </div>
           </div>
@@ -163,7 +223,6 @@ const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => a
 
         <div class="form-card mb-4">
           <p class="text-xs font-bold opacity-40 mb-3 tracking-widest">PAYMENT ACCOUNT</p>
-          
           <div class="account-grid mb-3">
             <div v-for="type in accountCategories" :key="type.id" 
                  class="acc-type-box" :class="{ 'type-active': activeAccountType === type.id }"
@@ -172,7 +231,6 @@ const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => a
               <span>{{ type.name }}</span>
             </div>
           </div>
-
           <div class="sub-account-list flex flex-wrap gap-2">
             <button v-for="sub in subAccountMap[activeAccountType]" :key="sub"
                     @click="newEntry.account = sub"
@@ -182,67 +240,90 @@ const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => a
           </div>
         </div>
 
-        <div class="form-card mb-5">
-          <InputText v-model="newEntry.note" placeholder="在這裡輸入備註..." class="w-full border-none p-0 bg-transparent font-bold text-sm" />
+        <div class="form-card mb-5 note-card">
+          <p class="text-xs font-bold opacity-40 mb-2 tracking-widest">NOTE / DESCRIPTION</p>
+          <InputText v-model="newEntry.note" placeholder="記錄一點細節吧..." class="w-full border-none p-0 bg-transparent font-bold text-base note-input" />
         </div>
 
-        <div class="keypad mb-5">
-          <div v-for="k in ['1','2','3','4','5','6','7','8','9','.', '0']" :key="k" class="key" @click="appendNum(k)">{{ k }}</div>
-          <div class="key text-red-500" @click="deleteNum"><i class="pi pi-backspace"></i></div>
+        <div class="flex gap-2">
+           <Button v-if="isEditing" label="刪除" severity="danger" outlined class="flex-1 p-3 font-bold border-round-xl" @click="isAddDialogVisible = false" />
+           <Button 
+            :label="isEditing ? '更新紀錄' : '儲存紀錄'" 
+            @click="saveTransaction" 
+            :class="newEntry.type === 'Expense' ? 'save-expense' : 'save-income'" 
+            class="flex-2 w-full p-3 font-bold border-none shadow-2 border-round-xl" 
+          />
         </div>
-
-        <Button label="確認儲存" @click="saveTransaction" 
-                :class="newEntry.type === 'Expense' ? 'save-expense' : 'save-income'" class="w-full p-3 font-bold border-none" />
       </div>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-.accounting-container { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; max-width: 1200px; margin: 0 auto; }
-@media (max-width: 992px) { .accounting-container { grid-template-columns: 1fr; } }
-
-/* 🔴🟢 模式切換 */
-.toggle-container { display: flex; padding: 6px; border-radius: 20px; background: var(--app-bg); border: 3px solid transparent; transition: 0.3s; }
-.border-expense { border-color: #fee2e2; }
-.border-income { border-color: #dcfce7; }
-.type-btn { flex: 1; border: none; padding: 0.8rem; border-radius: 15px; font-weight: 800; cursor: pointer; background: transparent; color: #94a3b8; transition: 0.3s; }
-.btn-expense-active { background: #ef4444 !important; color: white !important; }
-.btn-income-active { background: #22c55e !important; color: white !important; }
-
-/* 💳 帳戶總類 (第一層) */
-.account-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.acc-type-box {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 10px; border-radius: 14px; border: 1px solid var(--app-footer-border);
-  background: var(--app-bg); cursor: pointer; transition: 0.2s; font-size: 0.8rem; font-weight: 700;
+/* ⚡ 佈局二欄位：左日曆右清單 */
+.accounting-grid { 
+  display: grid; 
+  grid-template-columns: 420px 1fr; 
+  gap: 2rem; 
+  align-items: start;
 }
-.type-active { background: var(--app-primary) !important; color: white !important; border-color: var(--app-primary); }
 
-/* 💳 子帳戶 Pills (第二層) */
-.sub-account-list {
-  background: rgba(0,0,0,0.02); padding: 8px; border-radius: 12px;
+@media (max-width: 992px) { 
+  .accounting-grid { grid-template-columns: 1fr; } 
 }
-.sub-acc-pill {
-  border: 1px solid rgba(0,0,0,0.05); background: white; padding: 5px 12px;
-  border-radius: 20px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: 0.2s;
+
+/* 📅 日曆卡片 */
+.calendar-card { border-radius: 28px !important; overflow: hidden; padding: 0.5rem; }
+:deep(.custom-calendar) { width: 100% !important; border: none !important; background: transparent !important; }
+
+/* 💰 金額輸入樣式 */
+:deep(.huge-amount-input) {
+  background: transparent !important; border: none !important; text-align: left;
+  font-size: 3.5rem; font-weight: 900; letter-spacing: -2px; color: var(--app-text);
+  padding: 0; box-shadow: none !important; width: 100%;
 }
-.sub-active { background: #334155 !important; color: white !important; border-color: #334155; }
 
-/* 鍵盤與內容 */
-.form-card { background: rgba(0,0,0,0.03); padding: 1.2rem; border-radius: 22px; }
-.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.key { height: 58px; display: flex; justify-content: center; align-items: center; font-size: 1.6rem; font-weight: 900; cursor: pointer; border-radius: 12px; }
-.save-expense { background: #ef4444; color: white; border-radius: 18px; }
-.save-income { background: #22c55e; color: white; border-radius: 18px; }
+/* 📝 備註與表單 */
+.form-card { background: rgba(var(--app-primary-rgb), 0.04); padding: 1.2rem; border-radius: 22px; }
+.note-card { background: rgba(var(--app-primary-rgb), 0.08); }
+.note-input { color: var(--app-text); outline: none; }
 
-/* 其他 */
-.cat-item { display: flex; flex-direction: column; align-items: center; opacity: 0.3; transition: 0.3s; cursor: pointer; }
-.cat-item.active { opacity: 1; transform: scale(1.1); }
-.cat-circle { width: 52px; height: 52px; border-radius: 50%; display: flex; justify-content: center; align-items: center; }
-.fab-btn { position: fixed; bottom: 95px; right: 25px; background: #ff9f0a; border: none; padding: 1rem 1.8rem; border-radius: 50px; font-weight: 800; cursor: pointer; z-index: 100; }
+/* 模式切換器 */
+.toggle-container { display: flex; padding: 5px; border-radius: 20px; background: var(--app-bg); border: 2px solid transparent; }
+.border-expense { border-color: rgba(239, 68, 68, 0.1); }
+.border-income { border-color: rgba(34, 197, 94, 0.1); }
+.type-btn { flex: 1; border: none; padding: 0.8rem; border-radius: 16px; font-weight: 800; cursor: pointer; background: transparent; color: #94a3b8; transition: 0.3s; }
+.btn-expense-active { background: #ef4444 !important; color: white !important; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
+.btn-income-active { background: #22c55e !important; color: white !important; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); }
+
+/* 帳戶選擇 */
+.acc-type-box { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border-radius: 18px; border: 1px solid var(--app-footer-border); background: var(--app-footer-bg); cursor: pointer; transition: 0.2s; font-size: 0.8rem; font-weight: 700; }
+.type-active { background: var(--app-primary) !important; color: white !important; transform: scale(1.05); }
+.sub-acc-pill { border: 1px solid var(--app-footer-border); background: var(--app-footer-bg); padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; cursor: pointer; color: var(--app-text); }
+.sub-active { background: var(--app-text) !important; color: var(--app-bg) !important; border-color: var(--app-text); }
+
+/* 列表樣式 */
+.section-label { font-weight: 800; opacity: 0.6; font-size: 0.9rem; color: var(--app-text); }
+.category-icon-box { width: 48px; height: 48px; background: rgba(var(--app-primary-rgb), 0.1); color: var(--app-primary); border-radius: 15px; display: flex; justify-content: center; align-items: center; font-weight: 900; font-size: 1.3rem; }
+.amount-text { font-weight: 900; font-size: 1.3rem; }
+.income { color: #22c55e; }
+.expense { color: #ef4444; }
+
+/* 快速記帳 FAB */
+.fab-btn { 
+  position: fixed; bottom: 100px; right: 30px; 
+  background: linear-gradient(135deg, #ff9f0a, #ff7b00); 
+  border: none; padding: 1rem 1.8rem; border-radius: 50px; 
+  color: white; font-weight: 800; cursor: pointer; z-index: 100; 
+  box-shadow: 0 10px 25px rgba(255,159,10,0.4);
+  display: flex; align-items: center; gap: 8px;
+  transition: transform 0.2s;
+}
+.fab-btn:active { transform: scale(0.9); }
+
+/* 空狀態 */
+.empty-state { text-align: center; padding: 4rem 0; opacity: 0.5; font-weight: 700; }
 
 /* 深色模式修正 */
-:global(.dark-mode) .sub-acc-pill { background: #1e293b; color: #94a3b8; border-color: #334155; }
-:global(.dark-mode) .sub-active { background: var(--app-primary) !important; color: white !important; }
+:global(.dark-mode) .theme-card { background: rgba(30, 41, 59, 0.7) !important; }
 </style>
