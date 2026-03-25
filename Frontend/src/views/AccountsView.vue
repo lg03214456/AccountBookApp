@@ -295,3 +295,4 @@ const deleteAccount = () => {
 .delete-btn { color: #ef4444 !important; }
 .mini-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
 </style>
+
