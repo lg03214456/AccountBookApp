@@ -7,7 +7,7 @@ import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Select from 'primevue/select';
 
-// --- 1. 50 個精選圖標與配色 ---
+// --- 1. 資源定義 ---
 const presetIcons = [
   'pi-wallet', 'pi-building', 'pi-credit-card', 'pi-money-bill', 'pi-chart-line', 'pi-bitcoin', 'pi-percentage', 'pi-tags',
   'pi-shopping-cart', 'pi-shopping-bag', 'pi-shop', 'pi-briefcase', 'pi-home', 'pi-car', 'pi-truck', 'pi-send',
@@ -38,10 +38,8 @@ const isDialogVisible = ref(false);
 const isCatMgrVisible = ref(false);
 const isEditMode = ref(false);
 
-// ⭐ 圖標分段顯示邏輯
 const DEFAULT_COUNT = 17; 
 const displayCount = ref(DEFAULT_COUNT);
-
 const visibleIcons = computed(() => presetIcons.slice(0, displayCount.value));
 const hasMoreIcons = computed(() => displayCount.value < presetIcons.length);
 
@@ -77,7 +75,7 @@ const addCategory = () => {
   if (categories.value.some(c => c.value === val)) return;
   categories.value.push({ ...newCat.value, value: val });
   newCat.value = { label: '', icon: 'pi-wallet', color: '#f59e0b' };
-  displayCount.value = DEFAULT_COUNT; // 重置顯示數量
+  displayCount.value = DEFAULT_COUNT;
 };
 
 const removeCategory = (index: number) => {
@@ -119,54 +117,61 @@ const deleteAccount = () => {
 </script>
 
 <template>
-  <div class="view-wrapper fade-in">
+  <div class="view-wrapper">
     <header class="view-header">
       <h1 class="view-title">我的資產</h1>
       <div class="flex gap-2">
-        <Button icon="pi pi-sliders-h" variant="text" size="small" @click="isCatMgrVisible = true" class="opacity-60" />
-        <Button :icon="isValueVisible ? 'pi pi-eye' : 'pi pi-eye-slash'" variant="text" size="small" @click="isValueVisible = !isValueVisible" class="opacity-60" />
+        <Button icon="pi pi-sliders-h" variant="text" @click="isCatMgrVisible = true" class="opacity-40 hover:opacity-100" />
+        <Button :icon="isValueVisible ? 'pi pi-eye' : 'pi pi-eye-slash'" variant="text" @click="isValueVisible = !isValueVisible" class="opacity-40 hover:opacity-100" />
       </div>
     </header>
 
     <main class="view-content">
-      <section class="summary-section">
+      <section class="summary-section mb-6">
         <div class="net-worth-card shadow-lg">
+          <div class="card-glass-overlay"></div>
           <div class="relative z-1">
-            <p class="text-xs font-bold tracking-widest uppercase opacity-60 mb-2">Net Worth</p>
-            <h1 v-if="isValueVisible" class="text-4xl md:text-5xl font-black m-0">{{ formatCurrency(netWorth) }}</h1>
-            <h1 v-else class="text-4xl md:text-5xl font-black m-0">******</h1>
-            <div class="flex gap-6 mt-4 pt-4 border-top-1 border-white-alpha-10">
+            <p class="text-xs font-black tracking-widest uppercase opacity-50 mb-2">Net Worth</p>
+            <h1 v-if="isValueVisible" class="text-5xl font-black m-0 tracking-tighter">{{ formatCurrency(netWorth) }}</h1>
+            <h1 v-else class="text-5xl font-black m-0 tracking-tighter">******</h1>
+            
+            <div class="flex gap-8 mt-6 pt-5 border-top-1 border-white-alpha-10">
               <div class="stat-box">
-                <p class="text-xs opacity-60 mb-1 font-bold">總資產</p>
-                <p class="font-bold text-green-300 text-xl m-0">{{ isValueVisible ? formatCurrency(totalAssets) : '****' }}</p>
+                <p class="text-xs opacity-50 mb-1 font-bold uppercase tracking-wider">Assets</p>
+                <p class="font-black text-emerald-300 text-xl m-0">{{ isValueVisible ? formatCurrency(totalAssets) : '****' }}</p>
               </div>
               <div class="stat-box">
-                <p class="text-xs opacity-60 mb-1 font-bold">總負債</p>
-                <p class="font-bold text-red-300 text-xl m-0">{{ isValueVisible ? formatCurrency(totalLiabilities) : '****' }}</p>
+                <p class="text-xs opacity-50 mb-1 font-bold uppercase tracking-wider">Liabilities</p>
+                <p class="font-black text-rose-300 text-xl m-0">{{ isValueVisible ? formatCurrency(totalLiabilities) : '****' }}</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="list-section mt-5 pb-8">
-        <div v-for="group in groupedAccounts" :key="group.value" class="mb-5">
-          <div class="flex align-items-center gap-2 mb-3 px-1 opacity-50">
-            <i :class="['pi', group.icon, 'text-xs']" :style="{ color: group.color }"></i>
-            <span class="text-xs font-black uppercase tracking-widest">{{ group.label }}</span>
+      <section class="list-section">
+        <div v-for="group in groupedAccounts" :key="group.value" class="mb-6">
+          <div class="section-label mb-3 px-1 flex align-items-center gap-2">
+            <i :class="['pi', group.icon]" :style="{ color: group.color }"></i>
+            <span>{{ group.label }}</span>
           </div>
+          
           <div class="accounts-grid">
-            <Card v-for="acc in group.items" :key="acc.id" class="mb-3 theme-card account-item-card shadow-sm" @click="openEditDialog(acc)">
+            <Card v-for="acc in group.items" :key="acc.id" 
+                  class="theme-card account-item-card mb-3 cursor-pointer" 
+                  @click="openEditDialog(acc)">
               <template #content>
                 <div class="flex justify-content-between align-items-center">
                   <div class="flex align-items-center gap-4">
-                    <div class="acc-icon-box" :style="{ backgroundColor: group.color + '20', color: group.color }">
+                    <div class="acc-icon-box" :style="{ backgroundColor: group.color + '15', color: group.color }">
                       <i :class="['pi', group.icon]"></i>
                     </div>
                     <span class="font-black text-lg">{{ acc.name }}</span>
                   </div>
                   <div class="text-right">
-                    <div v-if="isValueVisible" :class="['text-xl font-black', acc.balance! >= 0 ? '' : 'text-red-500']">{{ formatCurrency(acc.balance!) }}</div>
+                    <div v-if="isValueVisible" :class="['text-xl font-black', acc.balance! >= 0 ? '' : 'text-rose-500']">
+                      {{ formatCurrency(acc.balance!) }}
+                    </div>
                     <div v-else class="text-xl font-black opacity-20">****</div>
                   </div>
                 </div>
@@ -177,15 +182,17 @@ const deleteAccount = () => {
       </section>
     </main>
 
-    <button class="fab-btn" @click="openAddDialog"><i class="pi pi-plus"></i></button>
+    <button class="fab-btn" @click="openAddDialog">
+      <i class="pi pi-plus"></i>
+    </button>
 
-    <Dialog v-model:visible="isCatMgrVisible" modal header="管理帳戶分類" :style="{ width: '92vw', maxWidth: '420px' }" class="modern-dialog">
+    <Dialog v-model:visible="isCatMgrVisible" modal header="管理帳戶分類" :style="{ width: '92vw', maxWidth: '450px' }" class="modern-dialog">
       <div class="p-3">
-        <div class="add-cat-form mb-4 p-3 border-round-xl bg-black-alpha-5 border-1 border-white-alpha-10">
-          <label class="block text-xs font-bold opacity-40 mb-3 uppercase">New Category</label>
-          <InputText v-model="newCat.label" placeholder="分類名稱 (如：虛擬貨幣)" class="w-full modern-input mb-3" />
+        <div class="add-cat-form mb-5 p-4 border-round-3xl bg-black-alpha-5 border-1 border-white-alpha-10">
+          <label class="section-label mb-3 block">New Category</label>
+          <InputText v-model="newCat.label" placeholder="分類名稱 (如：虛擬貨幣)" class="w-full modern-input mb-4" />
           
-          <div class="icon-grid mb-3">
+          <div class="icon-grid mb-4">
             <div v-for="icon in visibleIcons" :key="icon" class="icon-option" :class="{ 'active': newCat.icon === icon }" @click="newCat.icon = icon">
               <i :class="['pi', icon]"></i>
             </div>
@@ -194,23 +201,23 @@ const deleteAccount = () => {
             </div>
           </div>
 
-          <div class="flex gap-2 mb-4 overflow-x-auto py-1 custom-scrollbar">
+          <div class="flex gap-2 mb-5 overflow-x-auto py-1 custom-scrollbar">
             <div v-for="color in presetColors" :key="color" class="color-dot" :class="{ 'active': newCat.color === color }" :style="{ backgroundColor: color }" @click="newCat.color = color"></div>
           </div>
 
-          <Button label="建立分類" icon="pi pi-check" class="w-full p-3 font-bold border-round-xl" @click="addCategory" />
+          <Button label="建立分類" icon="pi pi-check" class="w-full p-3 font-black border-round-2xl" @click="addCategory" />
         </div>
 
-        <label class="block text-xs font-bold opacity-40 mb-2 uppercase px-1">Current</label>
-        <div class="cat-list custom-scrollbar">
-          <div v-for="(cat, index) in categories" :key="cat.value" class="flex align-items-center justify-content-between p-2 pl-3 border-round-xl mb-2 bg-black-alpha-5">
+        <label class="section-label mb-3 block px-1">Current Categories</label>
+        <div class="cat-list custom-scrollbar pr-2">
+          <div v-for="(cat, index) in categories" :key="cat.value" class="flex align-items-center justify-content-between p-3 border-round-2xl mb-2 bg-black-alpha-5 border-1 border-white-alpha-5">
             <div class="flex align-items-center gap-3">
               <div class="mini-icon" :style="{ backgroundColor: cat.color + '20', color: cat.color }">
                 <i :class="['pi', cat.icon]"></i>
               </div>
-              <span class="font-bold text-sm">{{ cat.label }}</span>
+              <span class="font-bold">{{ cat.label }}</span>
             </div>
-            <Button icon="pi pi-times" severity="danger" text size="small" @click="removeCategory(index)" />
+            <Button icon="pi pi-times" severity="danger" text @click="removeCategory(index)" />
           </div>
         </div>
       </div>
@@ -219,19 +226,20 @@ const deleteAccount = () => {
     <Dialog v-model:visible="isDialogVisible" modal :showHeader="false" :dismissableMask="true" :style="{ width: '92vw', maxWidth: '420px' }" class="modern-dialog">
       <div class="dialog-content">
         <div class="dialog-hero" :style="{ background: `linear-gradient(135deg, ${activeColor} 0%, #1e293b 100%)` }">
-          <p class="m-0 text-xs font-bold opacity-60 uppercase tracking-widest">Balance</p>
+          <p class="m-0 text-xs font-black opacity-50 uppercase tracking-widest">Balance Amount</p>
           <div class="flex align-items-center justify-content-center gap-2 mt-2">
-            <span class="text-2xl font-black opacity-50">$</span>
-            <InputNumber v-model="currentAccount.balance" mode="decimal" class="huge-input" inputClass="huge-input-el" autofocus />
+            <span class="text-2xl font-black opacity-40">$</span>
+            <InputNumber v-with-input-mask v-model="currentAccount.balance" mode="decimal" class="huge-input" inputClass="huge-input-el" autofocus />
           </div>
         </div>
-        <div class="p-4 pt-5">
+        
+        <div class="p-5">
           <div class="form-field mb-4">
-            <label class="block text-xs font-black opacity-40 mb-2 uppercase">Account Name</label>
+            <label class="section-label mb-2 block">Account Name</label>
             <InputText v-model="currentAccount.name" class="modern-input w-full" placeholder="例如：台新 Richart" />
           </div>
-          <div class="form-field mb-5">
-            <label class="block text-xs font-black opacity-40 mb-2 uppercase">Account Type</label>
+          <div class="form-field mb-6">
+            <label class="section-label mb-2 block">Account Type</label>
             <Select v-model="currentAccount.type" :options="categories" optionLabel="label" optionValue="value" class="modern-select w-full">
               <template #option="slotProps">
                 <div class="flex align-items-center gap-3">
@@ -241,11 +249,12 @@ const deleteAccount = () => {
               </template>
             </Select>
           </div>
+          
           <div class="flex flex-column gap-3">
-            <Button :label="isEditMode ? '更新帳戶' : '建立帳戶'" class="save-btn p-3 font-black border-none" :style="{ backgroundColor: activeColor }" @click="saveAccount" />
+            <Button :label="isEditMode ? '更新帳戶資訊' : '建立新帳戶'" class="save-btn p-3 font-black border-none shadow-lg" :style="{ backgroundColor: activeColor }" @click="saveAccount" />
             <div class="flex gap-2">
-              <Button v-if="isEditMode" icon="pi pi-trash" severity="danger" text class="delete-btn flex-1" @click="deleteAccount" />
-              <Button label="取消" severity="secondary" text class="flex-2 font-bold opacity-60" @click="isDialogVisible = false" />
+              <Button v-if="isEditMode" icon="pi pi-trash" severity="danger" text class="flex-1 opacity-60" @click="deleteAccount" />
+              <Button label="取消返回" severity="secondary" text class="flex-2 font-bold opacity-50" @click="isDialogVisible = false" />
             </div>
           </div>
         </div>
@@ -255,44 +264,63 @@ const deleteAccount = () => {
 </template>
 
 <style scoped>
-/* 基礎佈局 */
-.view-wrapper { width: 100%; max-width: 1000px; margin: 0 auto; overflow-x: hidden; }
-.net-worth-card { background: linear-gradient(135deg, var(--app-primary) 0%, #1e293b 100%); color: white; padding: 2.2rem; border-radius: 30px; position: relative; overflow: hidden; }
+/* ✨ 質感增強樣式 */
+.net-worth-card { 
+  background: linear-gradient(135deg, var(--app-primary) 0%, #1e293b 100%); 
+  color: white; 
+  padding: 2.5rem; 
+  border-radius: 32px; 
+  position: relative; 
+  overflow: hidden; 
+  border: 1px solid rgba(255,255,255,0.1);
+}
 
-/* 項目卡片 */
-.acc-icon-box { width: 44px; height: 44px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 1.1rem; }
-.account-item-card { transition: all 0.2s; cursor: pointer; border-radius: 20px !important; }
-.account-item-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+.card-glass-overlay {
+  position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 70%);
+  transform: rotate(30deg);
+}
 
-/* FAB */
-.fab-btn { position: fixed; bottom: 100px; right: 25px; width: 58px; height: 58px; border-radius: 20px; background: var(--app-primary); color: white; border: none; cursor: pointer; z-index: 100; box-shadow: 0 8px 20px rgba(var(--app-primary-rgb), 0.4); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+.acc-icon-box { width: 48px; height: 48px; border-radius: 14px; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; }
+.account-item-card { transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); }
+.account-item-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important; }
 
-/* ⭐ 圖標網格系統 (6欄) */
-.icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-.icon-option { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(255, 255, 255, 0.05); cursor: pointer; color: #64748b; transition: 0.2s; }
+.fab-btn { 
+  position: fixed; bottom: 100px; right: 25px; width: 60px; height: 60px; 
+  border-radius: 22px; background: var(--app-primary); color: white; border: none; 
+  cursor: pointer; z-index: 100; box-shadow: 0 10px 25px rgba(var(--app-primary-rgb), 0.4); 
+  display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+  transition: transform 0.2s;
+}
+.fab-btn:active { transform: scale(0.9); }
+
+/* 下拉與輸入優化 */
+.modern-input, .modern-select { 
+  background: rgba(var(--app-primary-rgb), 0.05) !important; 
+  border: 1.5px solid transparent !important; 
+  border-radius: 16px !important; 
+  font-weight: 700 !important; 
+}
+:deep(.p-select-label) { padding: 12px 15px !important; font-weight: 800; font-size: 0.9rem; }
+
+/* 彈窗細節 */
+.dialog-hero { padding: 3rem 2rem; text-align: center; color: white; position: relative; overflow: hidden; }
+:deep(.huge-input-el) { 
+  background: transparent !important; border: none !important; color: white !important; 
+  font-size: 3.2rem !important; font-weight: 900 !important; text-align: center !important; 
+  width: 100% !important; letter-spacing: -2px;
+}
+
+/* 圖標網格與色票 */
+.icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.icon-option { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: rgba(255, 255, 255, 0.05); cursor: pointer; color: #64748b; transition: 0.2s; }
 .icon-option.active { background: var(--app-primary); color: white; transform: scale(1.1); }
-.more-btn { background: rgba(var(--app-primary-rgb), 0.15); color: var(--app-primary); border: 1px dashed var(--app-primary); }
+.more-btn { border: 1px dashed var(--app-primary); color: var(--app-primary); }
 
-/* 色票 */
-.color-dot { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; flex-shrink: 0; border: 2px solid transparent; transition: 0.2s; }
+.color-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: 0.2s; }
 .color-dot.active { border-color: white; transform: scale(1.1); }
 
-/* 下拉選單與輸入 */
-.modern-input, .modern-select { background: rgba(var(--app-primary-rgb), 0.05) !important; border: 1.5px solid transparent !important; border-radius: 14px !important; font-weight: 700 !important; }
-:deep(.p-select-label) { padding: 10px 12px !important; font-weight: 800; }
-
-/* 彈窗 Hero */
-:deep(.modern-dialog) { border-radius: 26px; overflow: hidden; border: none; }
-.dialog-hero { padding: 2.8rem 2rem; text-align: center; color: white; transition: 0.5s; position: relative; overflow: hidden; }
-:deep(.huge-input-el) { background: transparent !important; border: none !important; color: white !important; font-size: 2.8rem !important; font-weight: 900 !important; text-align: center !important; width: 100% !important; }
-
-/* 列表容器 */
-.cat-list { max-height: 200px; overflow-y: auto; }
-.custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-
-.save-btn { border-radius: 16px; color: white; }
-.delete-btn { color: #ef4444 !important; }
-.mini-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.cat-list { max-height: 250px; overflow-y: auto; }
+.mini-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
+.save-btn { border-radius: 18px; color: white; }
 </style>
-

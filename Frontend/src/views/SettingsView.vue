@@ -4,9 +4,10 @@ import { useLogto } from "@logto/vue";
 import { useTheme } from '../composables/useTheme';
 import type { ThemeConfig } from '../types/theme';
 
-// 引入裁剪器組件與樣式
+// 引入裁剪器
 import { Cropper } from 'vue-advanced-cropper';
 import "vue-advanced-cropper/dist/style.css";
+
 // PrimeVue 元件
 import Card from 'primevue/card';
 import Button from 'primevue/button';
@@ -15,6 +16,7 @@ import FileUpload from 'primevue/fileupload';
 import Message from 'primevue/message';
 import ToggleSwitch from 'primevue/toggleswitch';
 import Dialog from 'primevue/dialog';
+import SelectButton from 'primevue/selectbutton';
 
 const { applyTheme, currentTheme, isDarkMode, toggleDarkMode } = useTheme();
 const { fetchUserInfo, isAuthenticated } = useLogto();
@@ -25,10 +27,16 @@ const uploadError = ref('');
 
 // --- 裁剪相關狀態 ---
 const isCropDialogVisible = ref(false);
-const imageToCrop = ref(''); // 準備被裁剪的原圖
-const cropperRef = ref();    // 引用裁剪器實例
+const imageToCrop = ref('');
+const cropperRef = ref(); 
 
-// 載入個人資訊
+const aspectOptions = ref([
+  { label: '橫向 16:9', value: 16/9 },
+  { label: '直向 9:16', value: 9/16 },
+  { label: '自由比例', value: 0 }
+]);
+const selectedAspect = ref(16/9);
+
 onMounted(async () => {
   if (isAuthenticated.value) {
     try {
@@ -39,7 +47,7 @@ onMounted(async () => {
   }
 });
 
-// --- 1. 七種預設顏色主題 ---
+// --- 1. 主題配色 ---
 const colorThemes: ThemeConfig[] = [
   { name: '翡翠綠', primary: '#10b981', bgType: 'color', background: '#f0fdf4', textColor: '#064e3b', cardBg: 'rgba(255, 255, 255, 0.8)' },
   { name: '日落橘', primary: '#f59e0b', bgType: 'color', background: '#fffbeb', textColor: '#78350f', cardBg: 'rgba(255, 255, 255, 0.8)' },
@@ -50,14 +58,13 @@ const colorThemes: ThemeConfig[] = [
   { name: '琥珀金', primary: '#d97706', bgType: 'color', background: '#fffcf0', textColor: '#713f12', cardBg: 'rgba(255, 255, 255, 0.8)' },
 ];
 
-// --- 2. 預設背景圖片 (直接套用，不需裁剪) ---
+// --- 2. 預設圖片 ---
 const presetImages = [
   { name: '極簡森林', url: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?q=80&w=1000' },
   { name: '寧靜海洋', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1000' },
   { name: '都會夜景', url: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1000' }
 ];
 
-// ⭐ 套用背景邏輯
 const handleImageApply = (url: string, sourceName: string) => {
   applyTheme({
     ...currentTheme.value,
@@ -68,35 +75,33 @@ const handleImageApply = (url: string, sourceName: string) => {
   });
 };
 
-// ⭐ 圖片上傳觸發：開啟裁剪視窗
 const onFileUpload = (event: any) => {
   const file = event.files[0];
   if (file.size > 5 * 1024 * 1024) {
-    uploadError.value = '圖片太大囉！請選擇 5MB 以內的檔案。';
+    uploadError.value = '檔案太大了（上限 5MB）';
     return;
   }
-  
   const reader = new FileReader();
   reader.onload = (e) => {
     imageToCrop.value = e.target?.result as string;
-    isCropDialogVisible.value = true; // 開啟裁剪視窗
+    isCropDialogVisible.value = true;
     uploadError.value = '';
   };
   reader.readAsDataURL(file);
 };
 
-// ⭐ 外部網址觸發：開啟裁剪視窗
 const applyExternalUrl = () => {
   if (!customBgUrl.value) return;
   imageToCrop.value = customBgUrl.value;
   isCropDialogVisible.value = true;
 };
 
-// ⭐ 執行裁剪並儲存
+const rotateLeft = () => cropperRef.value.rotate(-90);
+const rotateRight = () => cropperRef.value.rotate(90);
+
 const cropAndSave = () => {
   const { canvas } = cropperRef.value.getResult();
   if (canvas) {
-    // 轉為 Base64 並壓縮品質
     const croppedBase64 = canvas.toDataURL('image/jpeg', 0.8); 
     handleImageApply(croppedBase64, '裁剪後的桌布');
     isCropDialogVisible.value = false;
@@ -105,177 +110,193 @@ const cropAndSave = () => {
 </script>
 
 <template>
-  <div class="view-wrapper fade-in">
+  <div class="view-wrapper">
     
     <header class="view-header">
       <h1 class="view-title">個性化設定</h1>
-      <div class="header-tag opacity-50 text-xs font-bold uppercase tracking-widest">Preferences</div>
+      <span class="section-label px-1">PREFERENCES</span>
     </header>
 
-    <main class="view-content settings-layout">
-      <Card class="mb-4 theme-card shadow-sm border-none">
+    <main class="settings-layout">
+      <Card class="theme-card mb-5 border-none">
         <template #content>
-          <div class="flex align-items-center gap-4">
-            <div class="avatar-circle overflow-hidden shadow-2">
+          <div class="flex align-items-center gap-5">
+            <div class="avatar-container shadow-lg">
               <img v-if="userData?.picture" :src="userData.picture" alt="avatar" class="w-full h-full object-cover" />
-              <i v-else class="pi pi-user text-2xl"></i>
+              <div v-else class="flex align-items-center justify-content-center h-full w-full">
+                <i class="pi pi-user text-3xl opacity-30"></i>
+              </div>
             </div>
-            <div v-if="userData">
-              <h3 class="m-0 font-black text-xl">{{ userData.name || userData.username }}</h3>
-              <p class="m-0 text-sm font-bold opacity-50">{{ userData.email }}</p>
+            <div v-if="userData" class="flex-1">
+              <h3 class="m-0 font-black text-2xl tracking-tight">{{ userData.name || userData.username }}</h3>
+              <p class="m-0 text-sm font-bold opacity-40 mt-1">{{ userData.email }}</p>
             </div>
-            <div v-else class="opacity-30 italic">載入帳戶資訊中...</div>
+            <div v-else class="opacity-20 italic">Loading Profile...</div>
           </div>
         </template>
       </Card>
 
-      <Card class="mb-4 theme-card shadow-sm border-none">
+      <Card class="theme-card mb-5 border-none">
         <template #title>
-          <div class="flex justify-content-between align-items-center">
+          <div class="flex justify-content-between align-items-center w-full">
             <span class="text-xl font-black">介面外觀</span>
-            <div class="flex align-items-center gap-3">
-              <i :class="['pi', isDarkMode ? 'pi-moon text-primary' : 'pi-sun text-yellow-500']"></i>
+            <div class="flex align-items-center gap-3 bg-black-alpha-5 p-2 px-3 border-round-2xl">
+              <i :class="['pi', isDarkMode ? 'pi-moon text-indigo-400' : 'pi-sun text-amber-500']"></i>
               <ToggleSwitch :modelValue="isDarkMode" @update:modelValue="toggleDarkMode" />
             </div>
           </div>
         </template>
         <template #content>
-          <p class="text-xs font-black opacity-40 mb-3 uppercase tracking-widest">Color Themes</p>
+          <p class="section-label mb-4 px-1">Color Palette</p>
           <div class="color-grid">
             <div 
-              v-for="theme in colorThemes" 
-              :key="theme.name"
-              class="color-option"
-              :class="{ 'active-selection': currentTheme.name === theme.name && currentTheme.bgType === 'color' }"
+              v-for="theme in colorThemes" :key="theme.name"
+              class="color-option-box"
+              :class="{ 'active': currentTheme.name === theme.name && currentTheme.bgType === 'color' }"
               :style="{ backgroundColor: theme.primary }"
               @click="applyTheme(theme)"
             >
-              <i v-if="currentTheme.name === theme.name && currentTheme.bgType === 'color'" class="pi pi-check text-white"></i>
+              <i v-if="currentTheme.name === theme.name && currentTheme.bgType === 'color'" class="pi pi-check text-white text-xs"></i>
             </div>
           </div>
         </template>
       </Card>
 
-      <Card class="mb-4 theme-card shadow-sm border-none">
+      <Card class="theme-card mb-8 border-none">
         <template #title><span class="text-xl font-black">桌布設定</span></template>
         <template #content>
-          <p class="text-xs font-black opacity-40 mb-3 uppercase tracking-widest">Preset Wallpapers</p>
-          <div class="image-grid mb-4">
+          <p class="section-label mb-4 px-1">Preset Wallpapers</p>
+          <div class="image-grid mb-5">
             <div 
-              v-for="img in presetImages" 
-              :key="img.name"
-              class="image-option shadow-sm"
-              :class="{ 'active-img-selection': currentTheme.background === img.url }"
-              :style="{ backgroundImage: `url(${img.url}&w=200)` }"
+              v-for="img in presetImages" :key="img.name"
+              class="wallpaper-item shadow-sm"
+              :class="{ 'active': currentTheme.background === img.url }"
+              :style="{ backgroundImage: `url(${img.url}&w=300)` }"
               @click="handleImageApply(img.url, img.name)"
             >
-              <div v-if="currentTheme.background === img.url" class="img-check">
-                <i class="pi pi-check-circle text-white text-xl"></i>
+              <div class="wallpaper-overlay">
+                <span class="text-xs font-black">{{ img.name }}</span>
+                <i v-if="currentTheme.background === img.url" class="pi pi-check-circle ml-2"></i>
               </div>
-              <span class="img-label">{{ img.name }}</span>
             </div>
           </div>
 
-          <div class="flex flex-column gap-2 mt-4">
-            <label class="text-xs font-black opacity-40 uppercase tracking-widest">Image URL (貼上後將進入裁剪)</label>
-            <div class="p-inputgroup flex-1">
-                <InputText v-model="customBgUrl" placeholder="https://..." class="p-inputtext-sm border-round-left-xl" />
-                <Button icon="pi pi-scissors" @click="applyExternalUrl" class="border-round-right-xl" />
-            </div>
-          </div>
-        </template>
-      </Card>
-
-      <Card class="theme-card shadow-sm border-none mb-6">
-        <template #title><span class="text-xl font-black">自定義上傳</span></template>
-        <template #content>
-          <div class="upload-section">
+          <p class="section-label mb-3 px-1">Custom Upload & URL</p>
+          <div class="flex flex-column gap-3">
             <FileUpload 
-              mode="basic" 
-              accept="image/*" 
-              :maxFileSize="5000000" 
-              @select="onFileUpload" 
-              chooseLabel="挑選電腦中的圖片並裁剪"
-              class="p-button-outlined p-button-sm w-full font-bold border-round-xl"
+              mode="basic" accept="image/*" :maxFileSize="5000000" @select="onFileUpload" 
+              chooseLabel="挑選圖片並裁剪" class="p-button-outlined p-button-sm w-full font-black border-round-2xl"
             />
-            <Message v-if="uploadError" severity="error" class="mt-2" size="small">{{ uploadError }}</Message>
-            <p class="text-xs font-bold opacity-30 mt-3 text-center">支援 JPG/PNG。裁剪後系統會自動優化檔案大小。</p>
+            
+            <div class="p-inputgroup">
+              <span class="p-inputgroup-addon bg-black-alpha-5 border-none border-round-left-2xl">
+                <i class="pi pi-link opacity-40"></i>
+              </span>
+              <InputText v-model="customBgUrl" placeholder="貼上圖片網址..." class="p-inputtext-sm modern-input" />
+              <Button icon="pi pi-scissors" @click="applyExternalUrl" class="border-round-right-2xl" />
+            </div>
+            <Message v-if="uploadError" severity="error" variant="simple" size="small">{{ uploadError }}</Message>
           </div>
         </template>
       </Card>
 
-      <div class="text-center py-4 opacity-20 text-xs font-bold">
-        <p>BOOKKEEPING CLOUD CORE | v1.0.6</p>
+      <div class="text-center py-6 opacity-20">
+        <p class="text-xs font-black tracking-widest">SYSTEM CORE v1.0.6</p>
       </div>
     </main>
 
     <Dialog 
       v-model:visible="isCropDialogVisible" 
-      header="調整桌布顯示區域" 
+      header="調整桌布比例" 
       modal 
-      class="crop-dialog"
-      :style="{ width: '90vw', maxWidth: '650px' }"
-      :breakpoints="{ '960px': '95vw' }"
+      class="modern-dialog"
+      :style="{ width: '92vw', maxWidth: '700px' }"
     >
-      <div class="cropper-container">
-        <Cropper
-          ref="cropperRef"
-          class="cropper-box"
-          :src="imageToCrop"
-          :stencil-props="{
-            aspectRatio: 16/9,
-            movable: true,
-            resizable: true
-          }"
-          image-class="cropper-image"
-        />
-      </div>
+      <div class="p-2">
+        <div class="flex flex-column align-items-center mb-4 gap-3">
+          <SelectButton 
+            v-model="selectedAspect" 
+            :options="aspectOptions" 
+            optionLabel="label" 
+            optionValue="value" 
+            class="compact-aspect-selector"
+          />
+        </div>
 
-      <div class="flex justify-content-end gap-2 mt-4">
-        <Button label="取消" severity="secondary" text @click="isCropDialogVisible = false" />
-        <Button label="確認截圖並套用" icon="pi pi-check" @click="cropAndSave" class="font-bold border-round-xl" />
+        <div class="cropper-wrapper shadow-2">
+          <Cropper
+            ref="cropperRef"
+            class="cropper-box"
+            :src="imageToCrop"
+            :stencil-props="{
+              aspectRatio: selectedAspect || null,
+              movable: true, resizable: true
+            }"
+          />
+        </div>
+
+        <div class="flex justify-content-center gap-5 mt-4">
+          <Button icon="pi pi-replay" label="向左旋轉" variant="text" severity="secondary" @click="rotateLeft" class="font-bold" />
+          <Button icon="pi pi-refresh" label="向右旋轉" variant="text" severity="secondary" @click="rotateRight" class="font-bold" />
+        </div>
+
+        <div class="flex justify-content-end gap-3 mt-6 pt-4 border-top-1 border-white-alpha-10">
+          <Button label="取消" variant="text" severity="secondary" @click="isCropDialogVisible = false" />
+          <Button label="套用裁剪" icon="pi pi-check" @click="cropAndSave" class="font-black border-round-xl px-5 shadow-2" />
+        </div>
       </div>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-.settings-layout { max-width: 650px; margin: 0 auto; }
+.settings-layout { max-width: 700px; margin: 0 auto; width: 100%; }
 
-/* 個人資訊 */
-.avatar-circle { width: 70px; height: 70px; background: rgba(var(--app-primary-rgb), 0.1); color: var(--app-primary); border-radius: 22px; display: flex; justify-content: center; align-items: center; }
-
-/* 顏色選擇 */
-.color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); gap: 14px; }
-.color-option { height: 60px; border-radius: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 4px solid transparent; }
-.color-option:hover { transform: translateY(-4px); }
-.active-selection { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 0 3px var(--app-primary); }
-
-/* 圖片預覽 */
-.image-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.image-option { aspect-ratio: 16/10; background-size: cover; background-position: center; border-radius: 20px; cursor: pointer; position: relative; display: flex; align-items: flex-end; overflow: hidden; transition: 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); }
-.image-option:hover { transform: scale(1.05); }
-.active-img-selection { outline: 3px solid var(--app-primary); outline-offset: 3px; }
-.img-check { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(var(--app-primary-rgb), 0.3); display: flex; justify-content: center; align-items: center; }
-.img-label { background: rgba(0,0,0,0.6); color: white; width: 100%; font-size: 11px; padding: 7px; text-align: center; backdrop-filter: blur(10px); font-weight: 800; }
-
-/* 🎨 裁剪器專屬樣式 */
-.cropper-container {
-  width: 100%;
-  height: 450px;
-  background: #111;
-  border-radius: 16px;
+/* 頭像裝飾 */
+.avatar-container {
+  width: 85px; height: 85px;
+  border-radius: 28px;
+  background: var(--app-bg);
+  border: 4px solid var(--app-card-bg);
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: transform 0.3s ease;
 }
-.cropper-box {
-  width: 100%;
-  height: 100%;
+.avatar-container:hover { transform: scale(1.05) rotate(-3deg); }
+
+/* 配色網格 */
+.color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 12px; }
+.color-option-box { 
+  height: 54px; border-radius: 16px; cursor: pointer; 
+  display: flex; align-items: center; justify-content: center;
+  border: 3px solid transparent; transition: 0.2s;
 }
+.color-option-box.active { border-color: white; box-shadow: 0 0 0 3px var(--app-primary); transform: translateY(-2px); }
+
+/* 桌布選項 */
+.image-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.wallpaper-item {
+  aspect-ratio: 16/10; background-size: cover; background-position: center;
+  border-radius: 18px; cursor: pointer; position: relative; overflow: hidden;
+  border: 3px solid transparent; transition: 0.3s;
+}
+.wallpaper-item.active { border-color: var(--app-primary); transform: scale(1.02); }
+.wallpaper-overlay {
+  position: absolute; bottom: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%);
+  display: flex; align-items: flex-end; justify-content: center; padding: 8px;
+  color: white; opacity: 0.8;
+}
+
+/* 裁剪區域 */
+.cropper-wrapper { width: 100%; height: 420px; border-radius: 20px; overflow: hidden; background: #000; }
+.cropper-box { width: 100%; height: 100%; }
+
+/* 下拉與輸入 */
+.modern-input { background: rgba(var(--app-primary-rgb), 0.05) !important; border: none !important; border-radius: 14px !important; font-weight: 700 !important; }
+:deep(.compact-aspect-selector .p-button) { font-size: 0.75rem; font-weight: 800; padding: 0.5rem 1rem; }
 
 @media (max-width: 768px) {
-  .cropper-container { height: 300px; }
+  .image-grid { grid-template-columns: repeat(2, 1fr); }
+  .cropper-wrapper { height: 320px; }
 }
 </style>

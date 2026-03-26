@@ -1,20 +1,21 @@
-/* --- 1. 全域變數定義 --- */
+/* --- 1. 全域變數與設計令牌 --- */
 :root {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  /* 主題變數 - 由 useTheme.ts 控制 */
+  font-family: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  
+  /* 品牌色調 */
   --app-primary: #00668c;
   --app-primary-rgb: 0, 102, 140;
+  
+  /* 淺色模式佈局 */
   --app-bg: #f8faff;
   --app-bg-image: none;
   --app-text: #0f172a;
   --app-card-bg: rgba(255, 255, 255, 0.85);
   --app-header-bg: rgba(255, 255, 255, 0.8);
-  --app-footer-bg: #ffffff;
+  --app-footer-bg: rgba(255, 255, 255, 0.9);
   --app-footer-text: #64748b;
-  --app-footer-border: rgba(0, 0, 0, 0.08);
+  --app-footer-border: rgba(0, 0, 0, 0.06);
 
   color-scheme: light dark;
 }
@@ -24,11 +25,11 @@
   --app-bg: #0f172a;
   --app-bg-image: none !important;
   --app-text: #f8fafc;
-  --app-card-bg: rgba(30, 41, 59, 0.7);
-  --app-header-bg: rgba(15, 23, 42, 0.8);
-  --app-footer-bg: #1e293b;
+  --app-card-bg: rgba(30, 41, 59, 0.75);
+  --app-header-bg: rgba(15, 23, 42, 0.85);
+  --app-footer-bg: rgba(30, 41, 59, 0.95);
   --app-footer-text: #94a3b8;
-  --app-footer-border: rgba(255, 255, 255, 0.1);
+  --app-footer-border: rgba(255, 255, 255, 0.08);
 }
 
 /* --- 3. 核心佈局地基 --- */
@@ -37,80 +38,76 @@ body {
   padding: 0;
   min-height: 100vh;
   width: 100%;
-  
-  /* 背景連動與固定 (解決切換閃爍) */
   background-color: var(--app-bg);
   background-image: var(--app-bg-image);
   background-size: cover;
   background-position: center;
   background-attachment: fixed; 
   background-repeat: no-repeat;
-  
   color: var(--app-text);
-  transition: background-color 0.3s ease, color 0.3s ease;
-  display: block; 
+  transition: background-color 0.4s ease, color 0.4s ease;
+  overflow-x: hidden;
 }
 
-#app {
-  width: 100%;
-  min-height: 100vh;
-  background: transparent;
-}
-
-/* --- 4. ⭐ 內容標準容器 (解決忽寬忽窄的關鍵) --- */
+/* --- 4. ⭐ 內容標準容器 (解決對稱與寬度問題) --- */
 .view-wrapper {
   width: 100%;
-  max-width: 1000px; /* 這裡設定全 App 一致的最大寬度 */
-  margin: 0 auto;    /* 置中 */
-  padding: 1.5rem;
+  max-width: 1100px; /* 稍微放寬以增加呼吸感 */
+  margin: 0 auto;    /* 絕對水平置中 */
+  padding: 2rem 1.5rem; /* 上下左右均等留白 */
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  min-height: calc(100vh - 145px); /* 扣除 Header 與 Footer 高度 */
+  min-height: calc(100vh - 150px);
 }
 
 /* 統一的頁面標題區塊 */
 .view-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center; /* 改為 center 以維持對齊線 */
   margin-bottom: 0.5rem;
-  flex-shrink: 0;
+  padding: 0 0.5rem;
 }
 
 .view-title {
   font-size: 1.85rem;
   font-weight: 900;
   margin: 0;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.8px;
+  background: linear-gradient(135deg, var(--app-primary), #6366f1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-/* --- 5. 響應式縮放規則 --- */
-@media (max-width: 1024px) {
-  .view-wrapper { max-width: 92%; }
-}
-
+/* --- 5. 響應式優化 --- */
 @media (max-width: 768px) {
   .view-wrapper { 
-    max-width: 100%; 
-    padding: 1.2rem;
-    padding-bottom: 100px; /* 避開底部導覽列 */
+    padding: 1.25rem;
+    padding-bottom: 100px; /* 預留底部導覽空間 */
   }
-  .view-title { font-size: 1.6rem; }
+  .view-title { font-size: 1.65rem; }
 }
 
-/* --- 6. 通用組件 --- */
+/* --- 6. 通用組件規範 --- */
 .theme-card {
   background: var(--app-card-bg) !important;
   border: 1px solid var(--app-footer-border) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 20px !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 24px !important; /* 更有質感的圓角 */
   color: var(--app-text) !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Tailwind 注入 */
+/* 頁面切換動畫 */
+.fade-up-enter-active, .fade-up-leave-active {
+  transition: all 0.3s ease-out;
+}
+.fade-up-enter-from { opacity: 0; transform: translateY(20px); }
+.fade-up-leave-to { opacity: 0; transform: translateY(-20px); }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
