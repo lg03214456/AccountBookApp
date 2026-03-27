@@ -5,7 +5,9 @@ import { useLogto } from "@logto/vue";
 import Menu from 'primevue/menu';
 import DevTestMenu from "./components/DevTestMenu.vue";
 import { useTheme } from "./composables/useTheme";
+import Toast from 'primevue/toast'; // ⭐ 記得引入元件
 
+// 1. 初始化與主題狀態
 const { initTheme, isDarkMode, toggleDarkMode } = useTheme();
 const router = useRouter();
 const isLoading = ref(true);
@@ -14,6 +16,7 @@ onMounted(() => {
   initTheme();
 });
 
+// 2. Logto 認證邏輯
 const { signIn, signOut, isAuthenticated, fetchUserInfo } = useLogto();
 const userData = ref<any>(null);
 const baseUrl = import.meta.env.VITE_APP_URL || "http://localhost:5173";
@@ -21,6 +24,7 @@ const baseUrl = import.meta.env.VITE_APP_URL || "http://localhost:5173";
 const handleLogin = async () => await signIn(`${baseUrl}/callback`);
 const handleLogout = () => signOut(baseUrl);
 
+// 3. 使用者選單控制
 const userMenu = ref(); 
 const toggleUserMenu = (event: Event) => userMenu.value.toggle(event);
 
@@ -46,6 +50,7 @@ const menuItems = computed(() => [
   }
 ]);
 
+// 4. 監聽登入狀態並更新資料
 watch(isAuthenticated, async (newVal) => {
   isLoading.value = true;
   if (newVal) {
@@ -122,6 +127,11 @@ watch(isAuthenticated, async (newVal) => {
           <span class="link-text">帳戶</span>
         </RouterLink>
 
+        <RouterLink to="/plans" class="footer-item">
+          <div class="icon-wrapper"><i class="pi pi-flag"></i></div>
+          <span class="link-text">計畫</span>
+        </RouterLink>
+
         <RouterLink to="/stats" class="footer-item">
           <div class="icon-wrapper"><i class="pi pi-chart-pie"></i></div>
           <span class="link-text">分析</span>
@@ -139,17 +149,17 @@ watch(isAuthenticated, async (newVal) => {
 <style scoped>
 .app-layout { height: 100vh; display: flex; flex-direction: column; overflow: hidden; background-color: var(--app-bg); }
 
-/* 頂部導航優化 */
+/* 頂部導航 */
 .top-nav { flex-shrink: 0; z-index: 1000; background: var(--app-header-bg); backdrop-filter: blur(20px); border-bottom: 1px solid var(--app-footer-border); }
 .nav-container { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
 .logo-icon-bg { width: 32px; height: 32px; background: var(--app-primary); color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 12px; }
 .logo-text { font-weight: 900; letter-spacing: -0.5px; font-size: 1.1rem; }
 
-/* 內容區滾動 */
+/* 內容區 */
 .main-content { flex: 1; overflow-y: auto; display: flex; justify-content: center; scroll-behavior: smooth; }
 .content-container { width: 100%; max-width: 1200px; position: relative; }
 
-/* 🟠 底部導覽列 - 質感強化 */
+/* 🟠 底部導覽列核心樣式 */
 .app-bottom-nav {
   flex-shrink: 0;
   background-color: var(--app-footer-bg);
@@ -162,7 +172,14 @@ watch(isAuthenticated, async (newVal) => {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-.footer-grid { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; max-width: 500px; }
+/* ⭐ 修改：由 repeat(4, 1fr) 變更為 repeat(5, 1fr) */
+.footer-grid { 
+  display: grid; 
+  grid-template-columns: repeat(5, 1fr); 
+  width: 100%; 
+  max-width: 650px; /* 稍微增加寬度以平衡 5 個項目 */
+}
+
 .footer-item {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-decoration: none; color: var(--app-footer-text);
@@ -175,13 +192,14 @@ watch(isAuthenticated, async (newVal) => {
   width: 44px; height: 36px; transition: all 0.3s ease;
 }
 
-.footer-item i { font-size: 1.4rem; }
-.link-text { font-size: 0.7rem; font-weight: 900; }
+/* 為了 5 個項目不擁擠，圖標大小微調為 1.3rem */
+.footer-item i { font-size: 1.3rem; transition: transform 0.3s ease; }
+.link-text { font-size: 0.7rem; font-weight: 900; transition: all 0.3s ease; }
 
-/* Active 狀態：上浮感 */
+/* Active 狀態：上浮感與圓點裝飾 */
 .footer-item.router-link-active { opacity: 1; color: var(--app-primary) !important; }
 .footer-item.router-link-active .icon-wrapper { transform: translateY(-14px); }
-.footer-item.router-link-active i { transform: scale(1.2); }
+.footer-item.router-link-active i { transform: scale(1.15); }
 
 .footer-item.router-link-active::after {
   content: ''; position: absolute; bottom: 12px;
@@ -192,7 +210,7 @@ watch(isAuthenticated, async (newVal) => {
 
 @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
 
-/* 使用者晶片 */
+/* 使用者資訊晶片 */
 .user-chip { 
   display: flex; align-items: center; gap: 10px; padding: 5px 5px 5px 14px; 
   background: rgba(var(--app-primary-rgb), 0.05); border: 1px solid rgba(var(--app-primary-rgb), 0.1);
@@ -206,5 +224,6 @@ watch(isAuthenticated, async (newVal) => {
   .hide-on-mobile { display: none; }
   .nav-container { padding: 0.8rem 1rem; }
   .content-container { padding-bottom: 100px; }
+  .footer-grid { max-width: 100%; } /* 手機版撐滿 */
 }
 </style>

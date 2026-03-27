@@ -8,15 +8,24 @@ import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 
-// --- 1. 狀態控管 ---
+// --- 1. 狀態與資料定義 ---
 const isAddDialogVisible = ref(false);
 const isEditing = ref(false);
 const editingId = ref<number | null>(null);
 const selectedDate = ref(new Date());
 
+// ⭐ 優化：將 id 從 null 改為 0，解決 TS 類型衝突與 Key 警告
+const availablePlans = ref([
+  { id: 0, name: '不關聯計畫' }, 
+  { id: 101, name: '日本五天四夜遊' },
+  { id: 102, name: '新家裝修計畫' }
+]);
+
+// 模擬交易紀錄 (確保預設 planId 為 0)
 const transactions = ref([
-  { id: 1, date: '2026-03-27', category: '飲食', type: 'Expense', amount: -150, note: '午餐便當', account: '錢包' },
-  { id: 2, date: '2026-03-27', category: '交通', type: 'Expense', amount: -30, note: '公車', account: '錢包' },
+  { id: 1, date: '2026-03-27', category: '飲食', type: 'Expense', amount: -150, note: '午餐便當', account: '錢包', planId: 0 },
+  { id: 2, date: '2026-03-27', category: '交通', type: 'Expense', amount: -30, note: '公車', account: '錢包', planId: 0 },
+  { id: 3, date: '2026-03-27', category: '購物', type: 'Expense', amount: -2500, note: 'UNIQLO 衣服', account: '信用卡', planId: 101 },
 ]);
 
 const amount = ref<number | null>(0); 
@@ -24,7 +33,8 @@ const newEntry = ref({
   category: '飲食',
   note: '',
   type: 'Expense',
-  account: '錢包' 
+  account: '錢包',
+  planId: 0 // ⭐ 預設改為 0
 });
 
 const accountCategories = [
@@ -42,12 +52,18 @@ const subAccountMap = {
 type AccountType = keyof typeof subAccountMap;
 const activeAccountType = ref<AccountType>('cash');
 
-// --- 2. 邏輯函式 ---
+// --- 2. 核心邏輯函式 ---
+
+// 取得計畫名稱 (排除 ID 為 0 的情況)
+const getPlanName = (id: number) => {
+  return availablePlans.value.find(p => p.id === id)?.name || '';
+};
+
 const prepareNewEntry = () => {
   isEditing.value = false;
   editingId.value = null;
   amount.value = 0;
-  newEntry.value = { category: '飲食', note: '', type: 'Expense', account: '錢包' };
+  newEntry.value = { category: '飲食', note: '', type: 'Expense', account: '錢包', planId: 0 };
   activeAccountType.value = 'cash';
   isAddDialogVisible.value = true;
 };
@@ -56,7 +72,13 @@ const openEditDialog = (item: any) => {
   isEditing.value = true;
   editingId.value = item.id;
   amount.value = Math.abs(item.amount);
-  newEntry.value = { category: item.category, note: item.note, type: item.type, account: item.account };
+  newEntry.value = { 
+    category: item.category, 
+    note: item.note, 
+    type: item.type, 
+    account: item.account,
+    planId: item.planId || 0
+  };
   
   for (const [key, list] of Object.entries(subAccountMap)) {
     if (list.includes(item.account)) {
@@ -83,7 +105,8 @@ const saveTransaction = () => {
     type: newEntry.value.type,
     amount: finalAmount,
     note: newEntry.value.note,
-    account: newEntry.value.account
+    account: newEntry.value.account,
+    planId: newEntry.value.planId
   };
 
   if (isEditing.value) {
@@ -95,6 +118,7 @@ const saveTransaction = () => {
   isAddDialogVisible.value = false;
 };
 
+// --- 3. 計算屬性 ---
 const formattedDate = computed(() => {
   const d = selectedDate.value;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -112,52 +136,57 @@ const categories = [
 </script>
 
 <template>
-  <div class="view-wrapper fade-in">
-    
-    <header class="view-header flex justify-content-between align-items-center">
+  <div class="view-wrapper">
+    <header class="view-header">
       <h1 class="view-title">日常記帳</h1>
-      <Tag :severity="dailyTotal >= 0 ? 'success' : 'danger'" class="p-2 px-3 border-round-xl shadow-1">
+      <Tag :severity="dailyTotal >= 0 ? 'success' : 'danger'" class="p-2 px-3 border-round-xl shadow-1 font-black">
         今日損益: {{ dailyTotal.toLocaleString() }}
       </Tag>
     </header>
 
-    <main class="view-content accounting-grid">
+    <main class="accounting-grid">
       <section class="calendar-section">
         <Card class="theme-card calendar-card shadow-sm">
           <template #content>
-            <div class="flex justify-content-center w-full overflow-hidden">
-              <DatePicker v-model="selectedDate" inline class="custom-calendar" />
+            <div class="flex justify-content-center overflow-hidden p-2">
+              <DatePicker v-model="selectedDate" inline class="custom-calendar-obj" />
             </div>
           </template>
         </Card>
       </section>
       
       <section class="details-section">
-        <div class="section-label mb-3 px-1">
-          <i class="pi pi-calendar-plus mr-2 opacity-50"></i>
+        <div class="section-label mb-3 px-1 flex align-items-center">
+          <i class="pi pi-calendar-clock mr-2 opacity-50"></i>
           <span>{{ formattedDate }} 明細</span>
         </div>
 
-        <div class="transaction-list-wrapper">
-          <div v-if="dailyTransactions.length === 0" class="empty-state">
-            <i class="pi pi-inbox mb-3 text-4xl opacity-20"></i>
-            <p>這天還沒有紀錄喔</p>
+        <div class="transaction-list-container">
+          <div v-if="dailyTransactions.length === 0" class="empty-placeholder">
+            <i class="pi pi-inbox mb-3 text-4xl opacity-10"></i>
+            <p class="font-bold opacity-30">這天還沒有紀錄喔</p>
           </div>
 
           <Card v-for="item in dailyTransactions" :key="item.id" 
-                class="item-card shadow-sm mb-3 theme-card cursor-pointer" @click="openEditDialog(item)">
+                class="theme-card item-card mb-3 cursor-pointer" @click="openEditDialog(item)">
             <template #content>
               <div class="flex justify-content-between align-items-center">
-                <div class="flex align-items-center gap-3">
-                  <div class="category-icon-box">
+                <div class="flex align-items-center gap-4">
+                  <div class="category-icon-bg">
                     {{ item.category[0] }}
                   </div>
-                  <div>
-                    <div class="font-bold text-lg">{{ item.category }}</div>
-                    <div class="text-xs opacity-60 font-medium">{{ item.account }} | {{ item.note || '無備註' }}</div>
+                  <div class="flex flex-column gap-1">
+                    <span class="font-black text-lg leading-none">{{ item.category }}</span>
+                    <span class="text-xs font-bold opacity-40 uppercase tracking-wider">
+                      {{ item.account }} 
+                      <span v-if="item.planId !== 0" class="plan-tag">
+                        | <i class="pi pi-flag-fill text-primary"></i> {{ getPlanName(item.planId) }}
+                      </span>
+                      | {{ item.note || 'No Note' }}
+                    </span>
                   </div>
                 </div>
-                <div :class="['amount-text', item.amount >= 0 ? 'income' : 'expense']">
+                <div :class="['amount-display', item.amount >= 0 ? 'income' : 'expense']">
                   {{ item.amount >= 0 ? '+' : '' }}{{ item.amount.toLocaleString() }}
                 </div>
               </div>
@@ -173,66 +202,78 @@ const categories = [
     </button>
 
     <Dialog v-model:visible="isAddDialogVisible" modal :showHeader="false" :dismissableMask="true"
-            :style="{ width: '92vw', maxWidth: '420px' }" class="custom-dialog">
-      <div class="transaction-panel p-4">
-        <p class="text-center font-bold opacity-30 text-xs mb-3 uppercase tracking-widest">
-          {{ isEditing ? 'Edit Transaction' : 'New Transaction' }}
-        </p>
+            :style="{ width: '92vw', maxWidth: '420px' }" class="modern-dialog">
+      <div class="transaction-panel p-5">
+        <p class="section-label text-center mb-4 uppercase tracking-widest">Quick Record</p>
         
-        <div class="toggle-container mb-5" :class="newEntry.type === 'Expense' ? 'border-expense' : 'border-income'">
-          <button @click="newEntry.type = 'Expense'" class="type-btn" :class="{ 'btn-expense-active': newEntry.type === 'Expense' }">支出</button>
-          <button @click="newEntry.type = 'Income'" class="type-btn" :class="{ 'btn-income-active': newEntry.type === 'Income' }">收入</button>
+        <div class="toggle-wrapper mb-5" :class="newEntry.type === 'Expense' ? 'is-expense' : 'is-income'">
+          <button @click="newEntry.type = 'Expense'" class="type-tab" :class="{ 'active': newEntry.type === 'Expense' }">支出</button>
+          <button @click="newEntry.type = 'Income'" class="type-tab" :class="{ 'active': newEntry.type === 'Income' }">收入</button>
         </div>
 
-        <div class="amount-area text-center mb-5">
+        <div class="amount-hero text-center mb-6">
           <div class="flex justify-content-center align-items-center gap-2">
-            <span class="text-3xl font-black" :class="newEntry.type === 'Expense' ? 'text-red-500' : 'text-green-500'">$</span>
+            <span class="text-3xl font-black opacity-30">$</span>
             <InputNumber v-model="amount" mode="decimal" class="huge-amount-wrapper" inputClass="huge-amount-input" autofocus />
           </div>
         </div>
 
-        <div class="form-card mb-4">
-          <p class="text-xs font-bold opacity-40 mb-3 tracking-widest uppercase">Category</p>
+        <div class="form-group mb-5">
+          <p class="section-label mb-3 px-1">Category</p>
           <div class="flex justify-content-between">
-            <div v-for="cat in categories" :key="cat.name" class="cat-item" 
-                 :class="{ 'active': newEntry.category === cat.name }" @click="newEntry.category = cat.name">
-              <div class="cat-circle" :style="{ backgroundColor: cat.color }">
+            <div v-for="cat in categories" :key="cat.name" class="cat-pill" 
+                 :class="{ 'selected': newEntry.category === cat.name }" @click="newEntry.category = cat.name">
+              <div class="cat-icon-box" :style="{ backgroundColor: cat.color }">
                 <i :class="['pi', cat.icon]" :style="{ color: cat.iconColor }"></i>
               </div>
-              <span class="text-xs mt-2 font-bold">{{ cat.name }}</span>
+              <span class="text-xs font-black mt-2">{{ cat.name }}</span>
             </div>
           </div>
         </div>
 
-        <div class="form-card mb-4">
-          <p class="text-xs font-bold opacity-40 mb-3 tracking-widest uppercase">Account</p>
-          <div class="account-grid mb-3">
+        <div class="form-group mb-5">
+          <p class="section-label mb-3 px-1">Payment Method</p>
+          <div class="flex gap-2 mb-3">
             <div v-for="type in accountCategories" :key="type.id" 
-                 class="acc-type-box" :class="{ 'type-active': activeAccountType === type.id }"
+                 class="acc-selector flex-1" :class="{ 'active': activeAccountType === type.id }"
                  @click="selectAccountType(type.id)">
               <i :class="['pi', type.icon]" :style="{ color: activeAccountType === type.id ? 'white' : type.color }"></i>
-              <span>{{ type.name }}</span>
+              <span class="text-xs font-bold mt-1">{{ type.name }}</span>
             </div>
           </div>
-          <div class="sub-account-list flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-2">
             <button v-for="sub in subAccountMap[activeAccountType]" :key="sub"
                     @click="newEntry.account = sub"
-                    class="sub-acc-pill" :class="{ 'sub-active': newEntry.account === sub }">
+                    class="pill-btn" :class="{ 'active': newEntry.account === sub }">
               {{ sub }}
             </button>
           </div>
         </div>
 
-        <div class="form-card mb-5 note-card">
-          <p class="text-xs font-bold opacity-40 mb-2 tracking-widest uppercase">Note</p>
-          <InputText v-model="newEntry.note" placeholder="記錄細節..." class="w-full border-none p-0 bg-transparent font-bold note-input" />
+        <div class="form-group mb-5">
+          <p class="section-label mb-3 px-1">Relate to Plan</p>
+          <div class="flex flex-wrap gap-2">
+            <button v-for="plan in availablePlans" :key="plan.id"
+                    @click="newEntry.planId = plan.id"
+                    class="pill-btn plan-pill" :class="{ 'active': newEntry.planId === plan.id }">
+              <i v-if="plan.id !== 0" class="pi pi-flag-fill mr-1"></i>
+              {{ plan.name }}
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group mb-6">
+          <p class="section-label mb-2 px-1">Note</p>
+          <div class="note-input-box p-3 border-round-2xl bg-black-alpha-5">
+            <InputText v-model="newEntry.note" placeholder="記錄細節..." class="w-full border-none p-0 bg-transparent font-bold" />
+          </div>
         </div>
 
         <div class="flex gap-2">
-           <Button v-if="isEditing" label="刪除" severity="danger" outlined class="flex-1 p-3 font-bold border-round-xl" @click="isAddDialogVisible = false" />
-           <Button :label="isEditing ? '更新紀錄' : '儲存紀錄'" @click="saveTransaction" 
-                   :class="newEntry.type === 'Expense' ? 'save-expense' : 'save-income'" 
-                   class="flex-2 w-full p-3 font-bold border-none shadow-2 border-round-xl" />
+           <Button v-if="isEditing" icon="pi pi-trash" severity="danger" text class="flex-1" @click="isAddDialogVisible = false" />
+           <Button :label="isEditing ? '更新這筆紀錄' : '確認儲存紀錄'" @click="saveTransaction" 
+                   :class="newEntry.type === 'Expense' ? 'btn-save-expense' : 'btn-save-income'" 
+                   class="flex-3 w-full p-3 font-black border-none shadow-lg border-round-2xl" />
         </div>
       </div>
     </Dialog>
@@ -240,78 +281,78 @@ const categories = [
 </template>
 
 <style scoped>
-/* ⚡ 修正對稱性佈局 */
-.view-wrapper {
-  width: 100%;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 1.25rem; /* ⭐ 左右對稱的邊距 */
-  box-sizing: border-box;
-}
-
+/* ⚡ 佈局與對稱性修正 */
 .accounting-grid { 
   display: grid; 
-  grid-template-columns: 400px 1fr; 
+  grid-template-columns: 360px 1fr; 
   gap: 2.5rem; 
-  align-items: start;
   width: 100%;
 }
 
 @media (max-width: 992px) { 
-  .accounting-grid { 
-    grid-template-columns: 1fr; /* 手機版改為單欄，自動置中 */
-    gap: 1.5rem;
-  } 
+  .accounting-grid { grid-template-columns: 1fr; gap: 1.5rem; } 
 }
 
-/* 📅 日曆卡片 */
-.calendar-card { 
-  border-radius: 28px !important; 
-  width: 100%; 
-  box-sizing: border-box;
-}
-:deep(.custom-calendar) { 
-  width: 100% !important; 
-  border: none !important; 
-  max-width: 340px; /* 限制日曆最大寬度，避免在寬卡片內過度拉伸 */
+/* 📅 日曆微調 */
+.calendar-card { width: 100%; }
+:deep(.custom-calendar-obj) { 
+  width: 100% !important; border: none !important; 
+  background: transparent !important; max-width: 320px;
 }
 
-/* 💰 金額輸入 */
+/* 💰 金額 HERO 樣式 */
 :deep(.huge-amount-input) {
   background: transparent !important; border: none !important;
-  font-size: 3.5rem; font-weight: 900; letter-spacing: -2px;
-  padding: 0; box-shadow: none !important; width: 100%;
+  font-size: 3.5rem; font-weight: 900; letter-spacing: -3px;
+  padding: 0; box-shadow: none !important; width: 100%; color: var(--app-text);
 }
 
-/* 其他樣式保持您的邏輯 */
-.form-card { background: rgba(var(--app-primary-rgb), 0.04); padding: 1.2rem; border-radius: 22px; }
-.note-card { background: rgba(var(--app-primary-rgb), 0.08); }
+/* 🎨 明細列表樣式 */
+.category-icon-bg { 
+  width: 48px; height: 48px; 
+  background: rgba(var(--app-primary-rgb), 0.1); 
+  color: var(--app-primary); 
+  border-radius: 14px; 
+  display: flex; justify-content: center; align-items: center; 
+  font-weight: 900; font-size: 1.2rem;
+}
 
-.toggle-container { display: flex; padding: 5px; border-radius: 20px; background: var(--app-bg); border: 2px solid transparent; }
-.border-expense { border-color: rgba(239, 68, 68, 0.1); }
-.border-income { border-color: rgba(34, 197, 94, 0.1); }
-.type-btn { flex: 1; border: none; padding: 0.8rem; border-radius: 16px; font-weight: 800; cursor: pointer; transition: 0.3s; }
-.btn-expense-active { background: #ef4444 !important; color: white !important; }
-.btn-income-active { background: #22c55e !important; color: white !important; }
+.plan-tag { color: var(--app-primary); margin: 0 4px; }
+.amount-display { font-weight: 950; font-size: 1.4rem; }
+.income { color: #10b981; }
+.expense { color: #f43f5e; }
 
-.acc-type-box { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border-radius: 18px; border: 1px solid var(--app-footer-border); background: var(--app-footer-bg); cursor: pointer; font-size: 0.8rem; }
-.type-active { background: var(--app-primary) !important; color: white !important; }
-.sub-acc-pill { border: 1px solid var(--app-footer-border); background: var(--app-footer-bg); padding: 6px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
-.sub-active { background: var(--app-text) !important; color: var(--app-bg) !important; }
-
-.category-icon-box { width: 48px; height: 48px; background: rgba(var(--app-primary-rgb), 0.1); color: var(--app-primary); border-radius: 15px; display: flex; justify-content: center; align-items: center; font-weight: 900; }
-.amount-text { font-weight: 900; font-size: 1.3rem; }
-.income { color: #22c55e; }
-.expense { color: #ef4444; }
-
+/* ➕ FAB 懸浮按鈕 */
 .fab-btn { 
-  position: fixed; bottom: 100px; right: 30px; 
+  position: fixed; bottom: 100px; right: 25px; 
   background: var(--app-primary); 
-  border: none; padding: 1rem 1.8rem; border-radius: 50px; 
-  color: white; font-weight: 800; z-index: 100; 
-  box-shadow: 0 10px 25px rgba(var(--app-primary-rgb), 0.4);
-  display: flex; align-items: center;
+  border: none; padding: 1rem 1.8rem; border-radius: 20px; 
+  color: white; z-index: 100; 
+  box-shadow: 0 10px 25px rgba(var(--app-primary-rgb), 0.3);
+  display: flex; align-items: center; transition: 0.2s;
 }
+.fab-btn:active { transform: scale(0.95); }
 
-.empty-state { text-align: center; padding: 4rem 0; opacity: 0.5; }
+/* 彈窗內組件 */
+.toggle-wrapper { display: flex; padding: 4px; border-radius: 18px; background: rgba(0,0,0,0.05); }
+.type-tab { flex: 1; border: none; padding: 0.7rem; border-radius: 14px; font-weight: 900; cursor: pointer; background: transparent; color: #94a3b8; transition: 0.3s; }
+.type-tab.active { color: white; }
+.is-expense .active { background: #f43f5e; box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3); }
+.is-income .active { background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+
+.cat-pill { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: 0.2s; }
+.cat-icon-box { width: 54px; height: 54px; border-radius: 18px; display: flex; justify-content: center; align-items: center; font-size: 1.4rem; opacity: 0.4; }
+.cat-pill.selected .cat-icon-box { transform: scale(1.1); opacity: 1; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+
+.acc-selector { display: flex; flex-direction: column; align-items: center; padding: 12px; border-radius: 16px; background: rgba(0,0,0,0.03); border: 1.5px solid transparent; cursor: pointer; transition: 0.2s; }
+.acc-selector.active { background: var(--app-primary); color: white; border-color: var(--app-primary); }
+
+.pill-btn { padding: 8px 16px; border-radius: 14px; border: 1px solid var(--app-footer-border); background: var(--app-footer-bg); font-size: 0.75rem; font-weight: 800; color: var(--app-text); cursor: pointer; transition: 0.2s; }
+.pill-btn.active { background: var(--app-text); color: var(--app-bg); border-color: var(--app-text); }
+.plan-pill.active { background: var(--app-primary); color: white; border-color: var(--app-primary); }
+
+.btn-save-expense { background: #f43f5e !important; color: white; }
+.btn-save-income { background: #10b981 !important; color: white; }
+
+.empty-placeholder { text-align: center; padding: 5rem 0; }
 </style>

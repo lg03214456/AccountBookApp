@@ -7,6 +7,7 @@ import { createLogto, type LogtoConfig, UserScope } from '@logto/vue';
 
 // PrimeVue 相關
 import PrimeVue from 'primevue/config';
+import ToastService from 'primevue/toastservice'; // 吐司服務
 import Aura from '@primevue/themes/aura';
 import 'primeicons/primeicons.css';
 
@@ -14,7 +15,6 @@ import 'primeicons/primeicons.css';
 import './style.css'
 import './assets/main.css'; 
 
-// 1. 統一 Logto 設定
 const logtoConfig: LogtoConfig = {
   endpoint: 'https://y4spdd.logto.app/',
   appId: '9xw4sbd3iorkwgkzr4pxi',
@@ -27,23 +27,21 @@ const logtoConfig: LogtoConfig = {
 
 const app = createApp(App)
 
-// 2. 註冊外掛程式 (注意順序)
-app.use(createLogto, logtoConfig);
+// 1. 先註冊核心外掛
 app.use(router)
+app.use(createLogto, logtoConfig)
 
-// 3. 註冊 PrimeVue
+// 2. 註冊 PrimeVue 核心
 app.use(PrimeVue, {
   theme: {
     preset: Aura,
     options: {
-      // 🟢 修改這裡，確保與 CSS 類別一致
       darkModeSelector: '.dark-mode',
     }
   }
 });
 
-// 印出目前的模式與變數 (除錯用)
-console.log('🚀 目前模式:', import.meta.env.MODE);
-console.log('🌐 目前 API 網址:', import.meta.env.VITE_API_BASE_URL);
+// 3. ⭐ 務必在 PrimeVue 之後註冊 Service
+app.use(ToastService)
 
 app.mount('#app')

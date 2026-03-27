@@ -5,9 +5,10 @@ import AccountingView from "../views/AccountingView.vue";
 import ChatView from "../views/ChatView.vue";
 import CallbackView from "../views/CallbackView.vue";
 import SettingsView from "../views/SettingsView.vue";
-import HomeView from '../views/HomeView.vue';
-import AccountsView from '../views/AccountsView.vue';
-import StatsView from '../views/StatsView.vue';
+import HomeView from "../views/HomeView.vue";
+import AccountsView from "../views/AccountsView.vue";
+import StatsView from "../views/StatsView.vue";
+import PlansView from "../views/PlansView.vue";
 
 const router = createRouter({
   // 使用 HTML5 的歷史模式 (網址不會有 # 符號)
@@ -18,20 +19,17 @@ const router = createRouter({
       name: "home",
       component: HomeView, // 首頁顯示記帳
     },
-    { path: "/book", 
-      name: "accounting", 
-      component: AccountingView 
-    }, // ⭐ 這裡才是功能頁
+    { path: "/book", name: "accounting", component: AccountingView }, // ⭐ 這裡才是功能頁
     {
-      path: '/accounts',
-      name: 'accounts',
+      path: "/accounts",
+      name: "accounts",
       // 建議使用懶加載
-      component: AccountsView
+      component: AccountsView,
     },
     {
-      path: '/stats',
-      name: 'stats',
-      component: StatsView
+      path: "/stats",
+      name: "stats",
+      component: StatsView,
     },
     {
       path: "/chat",
@@ -48,6 +46,11 @@ const router = createRouter({
       path: "/settings",
       name: "settings",
       component: SettingsView,
+    },
+    {
+      path: "/plans",
+      name: "plans",
+      component: PlansView,
     },
   ],
 });
