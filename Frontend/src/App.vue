@@ -1,62 +1,80 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router"; // ⭐ 引入 useRoute
 import { useLogto } from "@logto/vue";
 import Popover from 'primevue/popover'; 
 import PanelMenu from 'primevue/panelmenu'; 
 import { useTheme } from "./composables/useTheme";
 import Toast from 'primevue/toast';
+import { useToast } from 'primevue/usetoast';
 
 const { initTheme, isDarkMode, toggleDarkMode } = useTheme();
 const router = useRouter();
+const route = useRoute(); // ⭐ 獲取目前路由實例
+const toast = useToast();
 const isLoading = ref(true);
 
 onMounted(() => initTheme());
 
-// Logto 認證邏輯
-const { signIn, signOut, isAuthenticated, fetchUserInfo } = useLogto();
+// --- Logto 配置 ---
+const { signIn, signOut, isAuthenticated, fetchUserInfo, getAccessToken } = useLogto();
 const userData = ref<any>(null);
 const baseUrl = import.meta.env.VITE_APP_URL || "http://localhost:5173";
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "https://localhost:5001";
 
 const handleLogin = async () => await signIn(`${baseUrl}/callback`);
 const handleLogout = () => signOut(baseUrl);
 
-// 🟢 選單控制邏輯 (解決 PC 版移動消失問題)
+// --- 🟢 核心功能：判斷是否顯示 Footer ---
+const showFooter = computed(() => {
+  // 條件：必須已登入 + 不是在 Loading 狀態 + 目前路徑「不是」首頁 (/)
+  return isAuthenticated.value && !isLoading.value && route.path !== '/';
+});
+
+// --- 🛠️ 測試函式 ---
+const testPublicApi = async () => {
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/auth/public`);
+    const data = await response.json();
+    toast.add({ severity: 'success', summary: '公開連線成功', detail: data.message, life: 3000 });
+  } catch (e) {
+    toast.add({ severity: 'error', summary: '連線失敗', detail: '後端未啟動', life: 4000 });
+  }
+};
+
+const testPrivateApi = async () => {
+  try {
+    const token = await getAccessToken('https://accountbook.api');
+    const response = await fetch(`${apiBaseUrl}/api/auth/private`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+    toast.add({ severity: 'info', summary: '私密連線成功', detail: `ID: ${data.yourLogtoId.substring(0, 8)}...`, life: 5000 });
+  } catch (e) {
+    toast.add({ severity: 'error', summary: '驗證失敗', detail: 'Token 異常', life: 4000 });
+  }
+};
+
+// --- 選單邏輯 ---
 const op = ref();
-const expandedKeys = ref({ '0': true, '1': true, '2': true });
+const expandedKeys = ref({ '0': true, '1': true, '1_0': true, '1_0_0': true }); 
 let hideTimer: any = null;
 
-const isPC = () => window.matchMedia("(min-width: 1024px)").matches;
-
-// 滑鼠移入：顯示並清除隱藏計時
 const onUserHover = (event: Event) => {
-  if (isPC()) {
-    clearTimeout(hideTimer);
+  if (window.matchMedia("(min-width: 1024px)").matches) {
+    if (hideTimer) clearTimeout(hideTimer);
     op.value.show(event);
   }
 };
-
-// 滑鼠離開：設定緩衝時間後隱藏
 const onUserLeave = () => {
-  if (isPC()) {
-    hideTimer = setTimeout(() => {
-      op.value.hide();
-    }, 300); // 300ms 緩衝，讓滑鼠有時間移入選單
-  }
+  hideTimer = setTimeout(() => op.value.hide(), 300);
+};
+const onMenuHover = () => {
+  if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
 };
 
-// 選單內部的 Hover 監聽：避免選單消失
-const onMenuHover = () => clearTimeout(hideTimer);
+const displayName = computed(() => userData.value?.name || userData.value?.username || '管理員');
 
-// 點擊觸發 (主要供手機版或 PC 強制點擊)
-const onUserClick = (event: Event) => op.value.toggle(event);
-
-const displayName = computed(() => {
-  if (!userData.value) return '使用者';
-  return userData.value.name || userData.value.username || userData.value.email?.split('@')[0] || '管理員';
-});
-
-// 選單內容配置
 const menuItems = computed(() => [
   {
     key: '0',
@@ -64,21 +82,28 @@ const menuItems = computed(() => [
     icon: 'pi pi-user',
     items: [
       { label: 'AI 助理', icon: 'pi pi-comments', command: () => router.push('/chat') },
-      { label: isDarkMode.value ? '日間模式' : '深夜模式', icon: isDarkMode.value ? 'pi pi-sun' : 'pi pi-moon', command: () => toggleDarkMode() }
+      { label: isDarkMode.value ? '日間' : '深夜', icon: isDarkMode.value ? 'pi pi-sun' : 'pi pi-moon', command: () => toggleDarkMode() }
     ]
   },
-  ...(userData.value ? [{
+  ...(isAuthenticated.value ? [{
     key: '1',
     label: '開發管理',
     icon: 'pi pi-cog',
     items: [
-      {
-        label: '開發測試工具',
-        icon: 'pi pi-code',
+      { 
+        key: '1_0',
+        label: '連線診斷', 
+        icon: 'pi pi-server',
         items: [
-          { label: '模擬數據', icon: 'pi pi-database', command: () => console.log('模擬數據') },
-          { label: '清理快取', icon: 'pi pi-refresh', command: () => { localStorage.clear(); location.reload(); } },
-          { label: '路由檢查', icon: 'pi pi-map', command: () => console.table(router.getRoutes()) }
+          {
+            key: '1_0_0',
+            label: '身分驗證測試',
+            icon: 'pi pi-shield',
+            items: [
+              { label: '公開測試', icon: 'pi pi-unlock', command: testPublicApi },
+              { label: '私密測試', icon: 'pi pi-lock', command: testPrivateApi }
+            ]
+          }
         ]
       }
     ]
@@ -89,7 +114,7 @@ const menuItems = computed(() => [
     icon: 'pi pi-info-circle',
     items: [
       { label: '帳號設定', icon: 'pi pi-user-edit', command: () => router.push('/settings') },
-      { label: '登出系統', icon: 'pi pi-sign-out', class: 'text-red-500', command: () => handleLogout() }
+      { label: '登出', icon: 'pi pi-sign-out', class: 'text-red-500', command: () => handleLogout() }
     ]
   }
 ]);
@@ -106,14 +131,7 @@ watch(isAuthenticated, async (newVal) => {
 <template>
   <Toast />
 
-  <div v-if="isLoading" class="loading-overlay">
-    <div class="loader-content">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2.5rem; color: var(--app-primary)"></i>
-      <p class="mt-4 font-black opacity-50 text-xs">Cloud Syncing...</p>
-    </div>
-  </div>
-
-  <div v-else class="app-layout">
+  <div class="app-layout">
     <header v-if="isAuthenticated" class="top-nav">
       <div class="nav-container">
         <RouterLink to="/" class="logo-link">
@@ -124,40 +142,31 @@ watch(isAuthenticated, async (newVal) => {
         </RouterLink>
 
         <div class="top-right-actions">
-          <div 
-            class="user-chip shadow-sm" 
-            @click="onUserClick" 
-            @mouseenter="onUserHover"
-            @mouseleave="onUserLeave"
-          >
+          <div class="user-chip shadow-sm" @click="op.toggle($event)" @mouseenter="onUserHover" @mouseleave="onUserLeave">
             <i class="pi pi-th-large chip-side-icon"></i>
-            <div class="user-info-text" v-if="userData">
+            <div class="user-info-text hide-on-mobile">
               <span class="user-name">{{ displayName }}</span>
-              <i class="pi pi-chevron-down text-[10px] opacity-20 ml-1"></i>
+              <i class="pi pi-chevron-down ml-1 opacity-20" style="font-size: 0.7rem;"></i>
             </div>
             <div class="mini-avatar">
               <img :src="userData?.picture || 'https://ui-avatars.com/api/?background=random&name=' + displayName" />
             </div>
           </div>
 
-          <Popover 
-            ref="op" 
-            class="custom-popover"
-            @mouseenter="onMenuHover"
-            @mouseleave="onUserLeave"
-          >
-            <PanelMenu 
-              v-model:expandedKeys="expandedKeys"
-              :model="menuItems" 
-              class="w-full border-none" 
-            />
+          <Popover ref="op" class="custom-popover" @mouseenter="onMenuHover" @mouseleave="onUserLeave">
+            <PanelMenu v-model:expandedKeys="expandedKeys" :model="menuItems" class="w-full border-none" />
           </Popover>
         </div>
       </div>
     </header>
 
     <main class="main-content">
-      <div class="content-container">
+      <div v-if="isLoading" class="loading-container">
+        <i class="pi pi-spin pi-spinner" style="font-size: 2.5rem; color: var(--app-primary)"></i>
+        <p class="mt-4 font-black opacity-40 text-xs uppercase tracking-widest">Initializing Cloud...</p>
+      </div>
+
+      <div v-else class="content-container">
         <router-view v-slot="{ Component }">
           <transition name="fade-up" mode="out-in">
             <component :is="Component" />
@@ -165,12 +174,14 @@ watch(isAuthenticated, async (newVal) => {
         </router-view>
 
         <div v-if="!isAuthenticated" class="guest-gate">
-          <button @click="handleLogin" class="auth-btn login-btn">立即登入</button>
+          <div class="lock-icon-bg mb-6"><i class="pi pi-lock" style="font-size: 2rem;"></i></div>
+          <h2 class="font-black text-2xl mb-2">Cloud Access</h2>
+          <button @click="handleLogin" class="auth-btn login-btn shadow-4">立即登入</button>
         </div>
       </div>
     </main>
 
-    <footer v-if="isAuthenticated" class="app-bottom-nav">
+    <footer v-if="showFooter" class="app-bottom-nav">
       <div class="footer-grid">
         <RouterLink to="/book" class="footer-item"><i class="pi pi-book"></i><span>帳本</span></RouterLink>
         <RouterLink to="/accounts" class="footer-item"><i class="pi pi-briefcase"></i><span>帳戶</span></RouterLink>
@@ -183,54 +194,30 @@ watch(isAuthenticated, async (newVal) => {
 </template>
 
 <style scoped>
+/* 佈局與 Logo 排版修正 */
 .app-layout { height: 100vh; display: flex; flex-direction: column; overflow: hidden; background-color: var(--app-bg); }
-
-/* 🟢 Logo 與 Header 對齊修復 */
-.top-nav { flex-shrink: 0; z-index: 1000; background: var(--app-header-bg); backdrop-filter: blur(20px); border-bottom: 1px solid var(--app-footer-border); }
+.top-nav { flex-shrink: 0; z-index: 1000; background: var(--app-header-bg); border-bottom: 1px solid var(--app-footer-border); }
 .nav-container { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0.6rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
 
-.logo-section { display: flex; align-items: center; gap: 12px; }
-.logo-icon-bg { width: 32px; height: 32px; background: var(--app-primary); color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-.logo-text { font-weight: 900; letter-spacing: -0.5px; font-size: 1.1rem; line-height: 1; }
+.logo-link { text-decoration: none; display: flex; align-items: center; }
+.logo-section { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 12px; }
+.logo-icon-bg { width: 32px; height: 32px; background: var(--app-primary); color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.logo-text { font-weight: 900; font-size: 1.1rem; color: var(--app-text); white-space: nowrap; line-height: 1; }
 
-/* 🟢 User Chip 並排樣式修復 */
-.user-chip { 
-  display: flex !important; 
-  flex-direction: row !important; 
-  align-items: center !important; 
-  gap: 12px; 
-  padding: 4px 4px 4px 14px; 
-  background: rgba(var(--app-primary-rgb), 0.05); 
-  border: 1px solid rgba(var(--app-primary-rgb), 0.1); 
-  border-radius: 40px; 
-  cursor: pointer;
-  white-space: nowrap;
-}
+.main-content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; position: relative; }
+.content-container { flex: 1; width: 100%; max-width: 1200px; margin: 0 auto; padding: 1rem; position: relative; }
 
-.chip-side-icon { font-size: 0.9rem; opacity: 0.4; }
-.user-info-text { display: flex; align-items: center; }
-.user-name { font-size: 0.9rem; font-weight: 800; color: var(--app-text); }
-
-.mini-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: 2px solid white; flex-shrink: 0; }
-.mini-avatar img { width: 100%; height: 100%; object-fit: cover; }
-
-/* 🟢 Footer 樣式 */
-.app-bottom-nav { flex-shrink: 0; background-color: var(--app-footer-bg); backdrop-filter: blur(15px); border-top: 1px solid var(--app-footer-border); height: 80px; display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); }
+.app-bottom-nav { flex-shrink: 0; background-color: var(--app-footer-bg); border-top: 1px solid var(--app-footer-border); height: 80px; display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom); }
 .footer-grid { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; max-width: 650px; }
 .footer-item { display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: var(--app-footer-text); opacity: 0.5; transition: 0.4s; gap: 4px; }
-.footer-item.router-link-active { opacity: 1; color: var(--app-primary) !important; }
-.footer-item i { font-size: 1.3rem; }
-.footer-item span { font-size: 0.7rem; font-weight: 900; }
+.footer-item.router-link-active { opacity: 1; color: var(--app-primary) !important; font-weight: 900; }
 
-/* 🟢 Popover 內容修正 */
-.custom-popover { padding: 0; width: 260px; background: var(--app-header-bg); border-radius: 16px; overflow: hidden; border: 1px solid var(--app-footer-border); }
-:deep(.p-panelmenu-header-content) { background: transparent !important; border: none !important; padding: 12px 16px; }
-:deep(.p-panelmenu-content) { background: rgba(var(--app-primary-rgb), 0.04) !important; border: none !important; padding-left: 12px; }
+.user-chip { display: flex; align-items: center; gap: 12px; padding: 4px 4px 4px 14px; background: rgba(var(--app-primary-rgb), 0.05); border-radius: 40px; cursor: pointer; }
+.mini-avatar { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: 2px solid white; flex-shrink: 0; }
+.custom-popover { padding: 0; width: 280px; background: var(--app-header-bg); border-radius: 16px; border: 1px solid var(--app-footer-border); overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
 
 @media (max-width: 768px) {
-  .user-info-text, .chip-side-icon { display: none; }
-  .user-chip { padding: 4px; }
-  .logo-text { display: none; }
+  .hide-on-mobile { display: none; }
   .footer-grid { max-width: 100%; }
 }
 </style>

@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'; // 1. 引入 Pinia
 import App from './App.vue'
 import router from './router'
 
@@ -26,6 +27,7 @@ const logtoConfig: LogtoConfig = {
 };
 
 const app = createApp(App)
+const pinia = createPinia(); // 2. 建立實例
 
 // 1. 先註冊核心外掛
 app.use(router)
@@ -43,5 +45,6 @@ app.use(PrimeVue, {
 
 // 3. ⭐ 務必在 PrimeVue 之後註冊 Service
 app.use(ToastService)
+app.use(pinia); // 3. 註冊到 Vue
 
 app.mount('#app')

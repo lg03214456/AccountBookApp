@@ -1,148 +1,154 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useAccountStore } from '../stores/accountStore';
+import { useTransactionStore } from '../stores/transactionStore';
+import { useToast } from 'primevue/usetoast';
+
 import Card from 'primevue/card';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
 import Select from 'primevue/select';
+import Toast from 'primevue/toast';
 
-// --- 1. 資源定義 ---
-const presetIcons = [
-  'pi-wallet', 'pi-building', 'pi-credit-card', 'pi-money-bill', 'pi-chart-line', 'pi-bitcoin', 'pi-percentage', 'pi-tags',
-  'pi-shopping-cart', 'pi-shopping-bag', 'pi-shop', 'pi-briefcase', 'pi-home', 'pi-car', 'pi-truck', 'pi-send',
-  'pi-bolt', 'pi-map-marker', 'pi-phone', 'pi-envelope', 'pi-calendar', 'pi-clock', 'pi-bell', 'pi-camera',
-  'pi-video', 'pi-image', 'pi-print', 'pi-ticket', 'pi-gift', 'pi-heart', 'pi-star', 'pi-sun',
-  'pi-moon', 'pi-cloud', 'pi-apple', 'pi-android', 'pi-facebook', 'pi-twitter', 'pi-instagram', 'pi-github',
-  'pi-discord', 'pi-slack', 'pi-database', 'pi-server', 'pi-desktop', 'pi-mobile', 'pi-tablet', 'pi-shield',
-  'pi-lock', 'pi-key'
-];
-
-const presetColors = ['#f59e0b', '#10b981', '#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#06b6d4', '#64748b'];
+// --- 1. 初始化 Store 與 工具 ---
+const accountStore = useAccountStore();
+const transactionStore = useTransactionStore();
+const toast = useToast();
 
 // --- 2. 狀態控管 ---
-const categories = ref([
-  { label: '現金資產', value: 'cash', icon: 'pi-wallet', color: '#f59e0b' },
-  { label: '銀行存款', value: 'bank', icon: 'pi-building', color: '#10b981' },
-  { label: '信用卡/負債', value: 'card', icon: 'pi-credit-card', color: '#6366f1' }
-]);
-
-const accounts = ref([
-  { id: 1, name: '現金錢包', balance: 5200, type: 'cash' },
-  { id: 2, name: '台新銀行', balance: 125000, type: 'bank' },
-  { id: 3, name: '中信信用卡', balance: -8500, type: 'card' },
-]);
-
 const isValueVisible = ref(true); 
-const isDialogVisible = ref(false);
-const isCatMgrVisible = ref(false);
-const isEditMode = ref(false);
+const isDialogVisible = ref(false);     // 帳戶編輯/新增彈窗
+const isHistoryVisible = ref(false);     // 歷史明細彈窗
+const isCatMgrVisible = ref(false);      // 分類管理彈窗
+const isEditMode = ref(false);           
+const submitted = ref(false);            
 
-const DEFAULT_COUNT = 17; 
-const displayCount = ref(DEFAULT_COUNT);
-const visibleIcons = computed(() => presetIcons.slice(0, displayCount.value));
-const hasMoreIcons = computed(() => displayCount.value < presetIcons.length);
-
-const currentAccount = ref({ id: null as any, name: '', balance: null as any, type: 'cash' });
+// 暫存資料
+const currentAccount = ref({ id: null as any, name: '', balance: 0, type: 'cash' });
+const selectedAccountForHistory = ref<any>(null);
 const newCat = ref({ label: '', icon: 'pi-wallet', color: '#f59e0b' });
 
 // --- 3. 計算屬性 ---
+
+// 依照分類對帳戶進行分組
 const groupedAccounts = computed(() => {
-  return categories.value.map(cat => ({
+  return accountStore.categories.map(cat => ({
     ...cat,
-    items: accounts.value.filter(acc => acc.type === cat.value)
+    items: accountStore.accounts.filter(acc => acc.type === cat.value)
   })).filter(group => group.items.length > 0);
 });
 
-const totalAssets = computed(() => accounts.value.filter(acc => acc.balance! > 0).reduce((sum, acc) => sum + acc.balance!, 0));
-const totalLiabilities = computed(() => accounts.value.filter(acc => acc.balance! < 0).reduce((sum, acc) => sum + Math.abs(acc.balance!), 0));
-const netWorth = computed(() => totalAssets.value - totalLiabilities.value);
+// 提取選定帳戶的歷史帳目 (由新到舊)
+const selectedHistory = computed(() => {
+  if (!selectedAccountForHistory.value) return [];
+  return transactionStore.transactions
+    .filter(t => t.accountId === selectedAccountForHistory.value.id)
+    .sort((a, b) => b.timestamp - a.timestamp);
+});
+
+// 彈窗頂部 Hero 區域的動態顏色
+const activeColor = computed(() => {
+  return accountStore.categories.find(c => c.value === currentAccount.value.type)?.color || 'var(--app-primary)';
+});
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(val);
 };
 
-const activeColor = computed(() => {
-  return categories.value.find(c => c.value === currentAccount.value.type)?.color || 'var(--app-primary)';
-});
-
-// --- 4. 功能函式 ---
-const showMoreIcons = () => { displayCount.value += 20; };
-
-const addCategory = () => {
-  if (!newCat.value.label) return;
-  const val = newCat.value.label.toLowerCase().trim().replace(/\s+/g, '-');
-  if (categories.value.some(c => c.value === val)) return;
-  categories.value.push({ ...newCat.value, value: val });
-  newCat.value = { label: '', icon: 'pi-wallet', color: '#f59e0b' };
-  displayCount.value = DEFAULT_COUNT;
-};
-
-const removeCategory = (index: number) => {
-  const cat = categories.value[index];
-  if (accounts.value.some(acc => acc.type === cat.value)) {
-    alert('此分類尚有帳戶在使用中，無法刪除！');
-    return;
-  }
-  categories.value.splice(index, 1);
-};
+// --- 4. 核心動作函式 ---
 
 const openAddDialog = () => {
   isEditMode.value = false;
-  currentAccount.value = { id: null, name: '', balance: null, type: categories.value[0]?.value || 'cash' };
+  submitted.value = false;
+  // ⭐ 初始化給予 0 而非 null，增加輸入框穩定性
+  currentAccount.value = { 
+    id: null, 
+    name: '', 
+    balance: 0, 
+    type: accountStore.categories[0]?.value || 'cash' 
+  };
   isDialogVisible.value = true;
 };
 
 const openEditDialog = (acc: any) => {
   isEditMode.value = true;
+  submitted.value = false;
   currentAccount.value = { ...acc };
   isDialogVisible.value = true;
 };
 
+const showHistory = (acc: any) => {
+  selectedAccountForHistory.value = acc;
+  isHistoryVisible.value = true;
+};
+
 const saveAccount = () => {
-  if (!currentAccount.value.name) return;
+  submitted.value = true;
+
+  // 🔴 防呆校驗
+  if (!currentAccount.value.name.trim() || currentAccount.value.balance === null) {
+    toast.add({ severity: 'warn', summary: '資訊不完整', detail: '請填寫名稱與初始餘額', life: 3000 });
+    return;
+  }
+
   if (isEditMode.value) {
-    const idx = accounts.value.findIndex(a => a.id === currentAccount.value.id);
-    if (idx !== -1) accounts.value[idx] = { ...currentAccount.value } as any;
+    accountStore.updateAccount(currentAccount.value.id, currentAccount.value);
+    toast.add({ severity: 'success', summary: '已更新', life: 2000 });
   } else {
-    accounts.value.push({ ...currentAccount.value, id: Date.now(), balance: currentAccount.value.balance || 0 } as any);
+    accountStore.addAccount({ ...currentAccount.value });
+    toast.add({ severity: 'success', summary: '帳戶已建立', life: 2000 });
   }
   isDialogVisible.value = false;
 };
 
-const deleteAccount = () => {
-  accounts.value = accounts.value.filter(a => a.id !== currentAccount.value.id);
+const handleDeleteAccount = () => {
+  accountStore.deleteAccount(currentAccount.value.id);
   isDialogVisible.value = false;
+  toast.add({ severity: 'error', summary: '已移除', detail: '帳戶已刪除', life: 2000 });
+};
+
+const handleAddCategory = () => {
+  if (!newCat.value.label) return;
+  const val = newCat.value.label.toLowerCase().trim().replace(/\s+/g, '-');
+  accountStore.addCategory({ ...newCat.value, value: val });
+  newCat.value = { label: '', icon: 'pi-wallet', color: '#f59e0b' };
 };
 </script>
 
 <template>
-  <div class="view-wrapper">
+  <div class="view-wrapper fade-in">
+    <Toast />
+
     <header class="view-header">
-      <h1 class="view-title">我的資產</h1>
-      <div class="flex gap-2">
-        <Button icon="pi pi-sliders-h" variant="text" @click="isCatMgrVisible = true" class="opacity-40 hover:opacity-100" />
-        <Button :icon="isValueVisible ? 'pi pi-eye' : 'pi pi-eye-slash'" variant="text" @click="isValueVisible = !isValueVisible" class="opacity-40 hover:opacity-100" />
-      </div>
+       <div>
+         <h1 class="view-title">我的資產</h1>
+         <p class="section-label mt-1 font-bold opacity-30 tracking-widest">Fiscal Atelier Ledger</p>
+       </div>
+       <div class="flex gap-2">
+         <Button icon="pi pi-sliders-h" variant="text" @click="isCatMgrVisible = true" class="opacity-40 hover:opacity-100" />
+         <Button :icon="isValueVisible ? 'pi pi-eye' : 'pi pi-eye-slash'" variant="text" @click="isValueVisible = !isValueVisible" class="opacity-40 hover:opacity-100" />
+       </div>
     </header>
 
     <main class="view-content">
       <section class="summary-section mb-6">
         <div class="net-worth-card shadow-lg">
-          <div class="card-glass-overlay"></div>
-          <div class="relative z-1">
-            <p class="text-xs font-black tracking-widest uppercase opacity-50 mb-2">Net Worth</p>
-            <h1 v-if="isValueVisible" class="text-5xl font-black m-0 tracking-tighter">{{ formatCurrency(netWorth) }}</h1>
-            <h1 v-else class="text-5xl font-black m-0 tracking-tighter">******</h1>
+          <div class="card-glass-overlay decoration-only"></div>
+          <div class="relative z-1 text-center py-2">
+            <p class="text-xs font-black tracking-widest uppercase opacity-40 mb-3">Total Net Worth</p>
+            <h1 v-if="isValueVisible" class="text-6xl font-black m-0 tracking-tighter">{{ formatCurrency(accountStore.netWorth) }}</h1>
+            <h1 v-else class="text-6xl font-black m-0 tracking-tighter">******</h1>
             
-            <div class="flex gap-8 mt-6 pt-5 border-top-1 border-white-alpha-10">
+            <div class="flex justify-content-center gap-8 mt-6 pt-5 border-top-1 border-white-alpha-10">
               <div class="stat-box">
-                <p class="text-xs opacity-50 mb-1 font-bold uppercase tracking-wider">Assets</p>
-                <p class="font-black text-emerald-300 text-xl m-0">{{ isValueVisible ? formatCurrency(totalAssets) : '****' }}</p>
+                <p class="text-xs opacity-40 mb-1 font-bold">ASSETS</p>
+                <p class="font-black text-emerald-300 text-xl m-0">{{ isValueVisible ? formatCurrency(accountStore.totalAssets) : '****' }}</p>
               </div>
               <div class="stat-box">
-                <p class="text-xs opacity-50 mb-1 font-bold uppercase tracking-wider">Liabilities</p>
-                <p class="font-black text-rose-300 text-xl m-0">{{ isValueVisible ? formatCurrency(totalLiabilities) : '****' }}</p>
+                <p class="text-xs opacity-40 mb-1 font-bold">LIABILITIES</p>
+                <p class="font-black text-rose-300 text-xl m-0">{{ isValueVisible ? formatCurrency(accountStore.totalLiabilities) : '****' }}</p>
               </div>
             </div>
           </div>
@@ -151,28 +157,30 @@ const deleteAccount = () => {
 
       <section class="list-section">
         <div v-for="group in groupedAccounts" :key="group.value" class="mb-6">
-          <div class="section-label mb-3 px-1 flex align-items-center gap-2">
-            <i :class="['pi', group.icon]" :style="{ color: group.color }"></i>
+          <div class="group-label mb-3 px-1 flex align-items-center gap-2">
+            <div class="label-dot" :style="{ backgroundColor: group.color }"></div>
             <span>{{ group.label }}</span>
           </div>
           
           <div class="accounts-grid">
             <Card v-for="acc in group.items" :key="acc.id" 
                   class="theme-card account-item-card mb-3 cursor-pointer" 
-                  @click="openEditDialog(acc)">
+                  @click="showHistory(acc)">
               <template #content>
                 <div class="flex justify-content-between align-items-center">
-                  <div class="flex align-items-center gap-4">
+                  <div class="flex align-items-center gap-4 flex-1">
                     <div class="acc-icon-box" :style="{ backgroundColor: group.color + '15', color: group.color }">
                       <i :class="['pi', group.icon]"></i>
                     </div>
-                    <span class="font-black text-lg">{{ acc.name }}</span>
-                  </div>
-                  <div class="text-right">
-                    <div v-if="isValueVisible" :class="['text-xl font-black', acc.balance! >= 0 ? '' : 'text-rose-500']">
-                      {{ formatCurrency(acc.balance!) }}
+                    <div class="flex align-items-center justify-content-between flex-1 pr-2">
+                        <span class="font-black text-xl leading-none">{{ acc.name }}</span>
+                        <i class="pi pi-pencil edit-trigger-btn" @click.stop="openEditDialog(acc)"></i>
                     </div>
-                    <div v-else class="text-xl font-black opacity-20">****</div>
+                  </div>
+                  <div class="text-right ml-4">
+                    <div :class="['text-xl font-black', acc.balance >= 0 ? '' : 'text-rose-500']">
+                      {{ isValueVisible ? formatCurrency(acc.balance) : '****' }}
+                    </div>
                   </div>
                 </div>
               </template>
@@ -182,145 +190,190 @@ const deleteAccount = () => {
       </section>
     </main>
 
-    <button class="fab-btn" @click="openAddDialog">
+    <button class="fab-btn-atelier shadow-lg" @click="openAddDialog">
       <i class="pi pi-plus"></i>
     </button>
 
-    <Dialog v-model:visible="isCatMgrVisible" modal header="管理帳戶分類" :style="{ width: '92vw', maxWidth: '450px' }" class="modern-dialog">
-      <div class="p-3">
-        <div class="add-cat-form mb-5 p-4 border-round-3xl bg-black-alpha-5 border-1 border-white-alpha-10">
-          <label class="section-label mb-3 block">New Category</label>
-          <InputText v-model="newCat.label" placeholder="分類名稱 (如：虛擬貨幣)" class="w-full modern-input mb-4" />
-          
-          <div class="icon-grid mb-4">
-            <div v-for="icon in visibleIcons" :key="icon" class="icon-option" :class="{ 'active': newCat.icon === icon }" @click="newCat.icon = icon">
-              <i :class="['pi', icon]"></i>
-            </div>
-            <div v-if="hasMoreIcons" class="icon-option more-btn" @click="showMoreIcons">
-              <i class="pi pi-ellipsis-h"></i>
-            </div>
+    <Dialog v-model:visible="isDialogVisible" modal :showHeader="false" :dismissableMask="true"
+            :style="{ width: '92vw', maxWidth: '420px' }" class="modern-dialog">
+      <div class="dialog-content">
+        <div class="dialog-hero" :style="{ background: `linear-gradient(135deg, ${activeColor} 0%, #1e293b 100%)` }">
+          <div class="card-glass-overlay decoration-only"></div> <p class="m-0 text-xs font-black opacity-50 uppercase tracking-widest z-1 relative">Initial Balance</p>
+          <div class="flex align-items-center justify-content-center gap-2 mt-2 z-2 relative">
+            <span class="text-2xl font-black opacity-40">$</span>
+            <InputNumber v-model="currentAccount.balance" mode="decimal" 
+                         class="huge-input" inputClass="huge-input-el" 
+                         :class="{ 'p-invalid': submitted && currentAccount.balance === null }"
+                         placeholder="0" autofocus />
           </div>
-
-          <div class="flex gap-2 mb-5 overflow-x-auto py-1 custom-scrollbar">
-            <div v-for="color in presetColors" :key="color" class="color-dot" :class="{ 'active': newCat.color === color }" :style="{ backgroundColor: color }" @click="newCat.color = color"></div>
-          </div>
-
-          <Button label="建立分類" icon="pi pi-check" class="w-full p-3 font-black border-round-2xl" @click="addCategory" />
+          <small v-if="submitted && currentAccount.balance === null" class="error-text-white z-1 relative">請輸入正確金額</small>
         </div>
+        
+        <div class="p-5">
+          <div class="form-field mb-5">
+            <label class="field-label">帳戶名稱 <span class="text-rose-500">*</span></label>
+            <InputText v-model="currentAccount.name" 
+                       class="modern-input w-full" 
+                       :class="{ 'p-invalid': submitted && !currentAccount.name.trim() }"
+                       placeholder="如：台新 Richart" />
+            <small v-if="submitted && !currentAccount.name.trim()" class="error-msg">此欄位不可為空</small>
+          </div>
 
-        <label class="section-label mb-3 block px-1">Current Categories</label>
-        <div class="cat-list custom-scrollbar pr-2">
-          <div v-for="(cat, index) in categories" :key="cat.value" class="flex align-items-center justify-content-between p-3 border-round-2xl mb-2 bg-black-alpha-5 border-1 border-white-alpha-5">
-            <div class="flex align-items-center gap-3">
-              <div class="mini-icon" :style="{ backgroundColor: cat.color + '20', color: cat.color }">
-                <i :class="['pi', cat.icon]"></i>
-              </div>
-              <span class="font-bold">{{ cat.label }}</span>
+          <div class="form-field mb-6">
+            <label class="field-label">帳戶分類</label>
+            <Select v-model="currentAccount.type" :options="accountStore.categories" 
+                    optionLabel="label" optionValue="value" class="modern-select w-full" />
+          </div>
+          
+          <div class="flex flex-column gap-3">
+            <Button :label="isEditMode ? '更新帳戶資訊' : '啟動新帳戶'" 
+                    class="save-btn p-3 font-black shadow-lg" 
+                    :style="{ backgroundColor: activeColor }" 
+                    @click="saveAccount" />
+            
+            <div class="flex gap-2">
+              <Button v-if="isEditMode" label="刪除帳戶" severity="danger" text class="flex-1 opacity-60" @click="handleDeleteAccount" />
+              <Button label="取消" severity="secondary" text class="flex-2 font-bold opacity-40" @click="isDialogVisible = false" />
             </div>
-            <Button icon="pi pi-times" severity="danger" text @click="removeCategory(index)" />
           </div>
         </div>
       </div>
     </Dialog>
 
-    <Dialog v-model:visible="isDialogVisible" modal :showHeader="false" :dismissableMask="true" :style="{ width: '92vw', maxWidth: '420px' }" class="modern-dialog">
-      <div class="dialog-content">
-        <div class="dialog-hero" :style="{ background: `linear-gradient(135deg, ${activeColor} 0%, #1e293b 100%)` }">
-          <p class="m-0 text-xs font-black opacity-50 uppercase tracking-widest">Balance Amount</p>
-          <div class="flex align-items-center justify-content-center gap-2 mt-2">
-            <span class="text-2xl font-black opacity-40">$</span>
-            <InputNumber v-with-input-mask v-model="currentAccount.balance" mode="decimal" class="huge-input" inputClass="huge-input-el" autofocus />
-          </div>
+    <Dialog v-model:visible="isHistoryVisible" modal header="帳戶往來明細" 
+            :dismissableMask="true" :style="{ width: '95vw', maxWidth: '450px' }" class="modern-dialog">
+      <div v-if="selectedAccountForHistory" class="p-2">
+        <div class="history-summary mb-5 p-4 border-round-3xl bg-black-alpha-5 flex justify-content-between align-items-center">
+            <div>
+                <p class="m-0 text-xs font-black opacity-40">ACCOUNT</p>
+                <h2 class="m-0 font-black">{{ selectedAccountForHistory.name }}</h2>
+            </div>
+            <div class="text-right">
+                <p class="m-0 text-xs font-black opacity-40">CURRENT BALANCE</p>
+                <h2 class="m-0 font-black text-primary">{{ formatCurrency(selectedAccountForHistory.balance) }}</h2>
+            </div>
         </div>
         
-        <div class="p-5">
-          <div class="form-field mb-4">
-            <label class="section-label mb-2 block">Account Name</label>
-            <InputText v-model="currentAccount.name" class="modern-input w-full" placeholder="例如：台新 Richart" />
-          </div>
-          <div class="form-field mb-6">
-            <label class="section-label mb-2 block">Account Type</label>
-            <Select v-model="currentAccount.type" :options="categories" optionLabel="label" optionValue="value" class="modern-select w-full">
-              <template #option="slotProps">
+        <div class="history-list custom-scrollbar">
+            <div v-if="selectedHistory.length === 0" class="text-center py-8 opacity-20 font-black italic">No records found.</div>
+            <div v-for="tx in selectedHistory" :key="tx.id" class="history-item flex justify-content-between align-items-center p-3 mb-2">
                 <div class="flex align-items-center gap-3">
-                  <i :class="['pi', slotProps.option.icon]" :style="{ color: slotProps.option.color }"></i>
-                  <span class="font-bold">{{ slotProps.option.label }}</span>
+                    <div class="tx-indicator" :class="tx.amount >= 0 ? 'is-income' : 'is-expense'"></div>
+                    <div>
+                        <div class="font-black text-sm">{{ tx.note || tx.category }}</div>
+                        <div class="text-xs opacity-40 font-bold">{{ tx.date }}</div>
+                    </div>
                 </div>
-              </template>
-            </Select>
-          </div>
-          
-          <div class="flex flex-column gap-3">
-            <Button :label="isEditMode ? '更新帳戶資訊' : '建立新帳戶'" class="save-btn p-3 font-black border-none shadow-lg" :style="{ backgroundColor: activeColor }" @click="saveAccount" />
-            <div class="flex gap-2">
-              <Button v-if="isEditMode" icon="pi pi-trash" severity="danger" text class="flex-1 opacity-60" @click="deleteAccount" />
-              <Button label="取消返回" severity="secondary" text class="flex-2 font-bold opacity-50" @click="isDialogVisible = false" />
+                <div class="font-black text-lg" :class="tx.amount >= 0 ? 'text-emerald-500' : 'text-rose-500'">
+                    {{ tx.amount >= 0 ? '+' : '' }}{{ tx.amount.toLocaleString() }}
+                </div>
             </div>
-          </div>
         </div>
       </div>
+    </Dialog>
+
+    <Dialog v-model:visible="isCatMgrVisible" modal header="管理分類標籤" 
+            :dismissableMask="true" :style="{ width: '92vw', maxWidth: '450px' }" class="modern-dialog">
+        <div class="p-3">
+            <div class="form-field mb-4">
+                <InputText v-model="newCat.label" placeholder="新分類名稱" class="w-full modern-input" />
+                <Button label="建立分類" @click="handleAddCategory" class="w-full mt-3 p-3 font-black border-round-2xl" />
+            </div>
+            <div class="cat-list custom-scrollbar pr-1">
+                <div v-for="cat in accountStore.categories" :key="cat.value" class="p-3 mb-2 bg-black-alpha-5 border-round-xl flex justify-content-between">
+                    <span class="font-bold">{{ cat.label }}</span>
+                    <i :class="cat.icon" :style="{ color: cat.color }"></i>
+                </div>
+            </div>
+        </div>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-/* ✨ 質感增強樣式 */
+/* 🎨 Fiscal Atelier 核心樣式 */
+.view-wrapper { background: var(--app-bg); min-height: 100vh; padding: 1.5rem; }
+
 .net-worth-card { 
   background: linear-gradient(135deg, var(--app-primary) 0%, #1e293b 100%); 
-  color: white; 
-  padding: 2.5rem; 
-  border-radius: 32px; 
-  position: relative; 
-  overflow: hidden; 
-  border: 1px solid rgba(255,255,255,0.1);
+  padding: 3.5rem 2.5rem; border-radius: 40px; position: relative; overflow: hidden;
+}
+
+/* ⭐ 關鍵修正：確保裝飾層不會攔截點擊 */
+.decoration-only {
+  pointer-events: none !important;
+  user-select: none !important;
 }
 
 .card-glass-overlay {
   position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-  background: radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 70%);
+  background: radial-gradient(circle at center, rgba(255,255,255,0.08) 0%, transparent 70%);
   transform: rotate(30deg);
+  z-index: 1;
 }
 
-.acc-icon-box { width: 48px; height: 48px; border-radius: 14px; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; }
-.account-item-card { transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1); }
-.account-item-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important; }
-
-.fab-btn { 
-  position: fixed; bottom: 100px; right: 25px; width: 60px; height: 60px; 
-  border-radius: 22px; background: var(--app-primary); color: white; border: none; 
-  cursor: pointer; z-index: 100; box-shadow: 0 10px 25px rgba(var(--app-primary-rgb), 0.4); 
-  display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
-  transition: transform 0.2s;
+/* 帳戶項目 */
+.account-item-card { 
+  border-radius: 28px !important; border: none !important;
+  background: rgba(var(--app-primary-rgb), 0.04) !important;
+  transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.fab-btn:active { transform: scale(0.9); }
+.account-item-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.05) !important; }
 
-/* 下拉與輸入優化 */
-.modern-input, .modern-select { 
-  background: rgba(var(--app-primary-rgb), 0.05) !important; 
-  border: 1.5px solid transparent !important; 
-  border-radius: 16px !important; 
-  font-weight: 700 !important; 
+/* 編輯筆按鈕 */
+.edit-trigger-btn {
+  padding: 10px; font-size: 0.95rem; color: var(--app-text); opacity: 0.2; cursor: pointer; transition: 0.2s;
 }
-:deep(.p-select-label) { padding: 12px 15px !important; font-weight: 800; font-size: 0.9rem; }
+.edit-trigger-btn:hover {
+  opacity: 1; transform: scale(1.2); color: var(--app-primary);
+}
+
+.acc-icon-box { width: 54px; height: 54px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+
+/* FAB */
+.fab-btn-atelier { 
+  position: fixed; bottom: 120px; right: 25px; width: 64px; height: 64px; 
+  border-radius: 24px; background: #004d61; color: white; border: none; 
+  font-size: 1.8rem; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 12px 30px rgba(0,77,97,0.4); cursor: pointer;
+}
 
 /* 彈窗細節 */
-.dialog-hero { padding: 3rem 2rem; text-align: center; color: white; position: relative; overflow: hidden; }
+.dialog-hero { padding: 4rem 2rem; border-radius: 0 0 40px 40px; text-align: center; color: white; position: relative; overflow: hidden; }
+
+/* ⭐ 關鍵修正：確保數字輸入框在最前層且可點擊 */
 :deep(.huge-input-el) { 
-  background: transparent !important; border: none !important; color: white !important; 
-  font-size: 3.2rem !important; font-weight: 900 !important; text-align: center !important; 
-  width: 100% !important; letter-spacing: -2px;
+  background: transparent !important; 
+  border: none !important; 
+  font-size: 3.5rem !important; 
+  font-weight: 950 !important; 
+  text-align: center !important; 
+  color: white !important; 
+  width: 100% !important;
+  position: relative;
+  z-index: 10;
+  cursor: text;
 }
 
-/* 圖標網格與色票 */
-.icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
-.icon-option { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: rgba(255, 255, 255, 0.05); cursor: pointer; color: #64748b; transition: 0.2s; }
-.icon-option.active { background: var(--app-primary); color: white; transform: scale(1.1); }
-.more-btn { border: 1px dashed var(--app-primary); color: var(--app-primary); }
+.modern-input, .modern-select { background: rgba(0,0,0,0.05) !important; border-radius: 16px !important; border: none !important; padding: 1rem !important; font-weight: 800; }
+.field-label { display: block; font-size: 0.7rem; font-weight: 900; opacity: 0.4; margin-bottom: 0.5rem; text-transform: uppercase; }
+.error-msg { color: #f43f5e; font-size: 0.7rem; font-weight: 800; margin-top: 4px; display: block; }
+.error-text-white { color: rgba(255,255,255,0.8); font-size: 0.7rem; font-weight: 800; margin-top: 8px; display: block; }
 
-.color-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: 0.2s; }
-.color-dot.active { border-color: white; transform: scale(1.1); }
+:deep(.p-invalid) { border: 1.5px solid #f43f5e !important; }
 
-.cat-list { max-height: 250px; overflow-y: auto; }
-.mini-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
-.save-btn { border-radius: 18px; color: white; }
+.save-btn { border-radius: 20px; color: white; transition: 0.3s; }
+.save-btn:active { transform: scale(0.96); }
+
+/* 📋 歷史明細 */
+.history-list { max-height: 400px; overflow-y: auto; padding-right: 8px; }
+.tx-indicator { width: 6px; height: 6px; border-radius: 50%; }
+.is-income { background: #10b981; }
+.is-expense { background: #f43f5e; }
+
+.group-label { font-size: 0.75rem; font-weight: 950; opacity: 0.4; text-transform: uppercase; letter-spacing: 1.5px; }
+.label-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
 </style>

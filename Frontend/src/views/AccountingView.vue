@@ -1,279 +1,353 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { usePlanStore } from '../stores/planStore';
+import { useTransactionStore } from '../stores/transactionStore';
+import { useAccountStore } from '../stores/accountStore';
+import { useToast } from 'primevue/usetoast';
+
 import DatePicker from 'primevue/datepicker';
 import Card from 'primevue/card';
-import Tag from 'primevue/tag';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import InputNumber from 'primevue/inputnumber';
+import SelectButton from 'primevue/selectbutton';
+import Toast from 'primevue/toast';
 
-// --- 1. 狀態與資料定義 ---
+// --- 1. 初始化 Store ---
+const planStore = usePlanStore();
+const transactionStore = useTransactionStore();
+const accountStore = useAccountStore();
+const toast = useToast();
+
+const activeView = ref('Calendar');
+const viewOptions = ref(['Calendar', 'List']);
+const selectedDate = ref(new Date());
+
 const isAddDialogVisible = ref(false);
 const isEditing = ref(false);
 const editingId = ref<number | null>(null);
-const selectedDate = ref(new Date());
 
-// ⭐ 優化：將 id 從 null 改為 0，解決 TS 類型衝突與 Key 警告
-const availablePlans = ref([
-  { id: 0, name: '不關聯計畫' }, 
-  { id: 101, name: '日本五天四夜遊' },
-  { id: 102, name: '新家裝修計畫' }
-]);
-
-// 模擬交易紀錄 (確保預設 planId 為 0)
-const transactions = ref([
-  { id: 1, date: '2026-03-27', category: '飲食', type: 'Expense', amount: -150, note: '午餐便當', account: '錢包', planId: 0 },
-  { id: 2, date: '2026-03-27', category: '交通', type: 'Expense', amount: -30, note: '公車', account: '錢包', planId: 0 },
-  { id: 3, date: '2026-03-27', category: '購物', type: 'Expense', amount: -2500, note: 'UNIQLO 衣服', account: '信用卡', planId: 101 },
-]);
-
-const amount = ref<number | null>(0); 
+// --- 2. 狀態控管 ---
+const amount = ref<number | null>(0);
 const newEntry = ref({
-  category: '飲食',
-  note: '',
-  type: 'Expense',
-  account: '錢包',
-  planId: 0 // ⭐ 預設改為 0
+  date: new Date(),
+  category: '飲食', note: '', type: 'Expense' as 'Expense' | 'Income' | 'Transfer',
+  accountId: accountStore.accounts[0]?.id || 0,
+  targetAccountId: accountStore.accounts[1]?.id || 0,
+  planId: 0 
 });
 
-const accountCategories = [
-  { id: 'cash', name: '現金', icon: 'pi-wallet', color: '#f59e0b' },
-  { id: 'card', name: '信用卡', icon: 'pi-credit-card', color: '#6366f1' },
-  { id: 'bank', name: '銀行卡', icon: 'pi-building', color: '#10b981' }
-];
+const activeAccountType = ref(accountStore.categories[0]?.value || 'cash');
+const activeTargetAccountType = ref(accountStore.categories[0]?.value || 'cash');
 
-const subAccountMap = {
-  cash: ['錢包', '家中存錢筒', '緊急備用金'],
-  card: ['國泰 CUBE', '台新 FlyGo', '中信全聯卡', 'Line Bank'],
-  bank: ['玉山銀行', '國泰世華', '郵局', '富邦銀行']
+// --- 3. 核心計算邏輯 ---
+const filteredPlans = computed(() => {
+  const allPlans = planStore.plans;
+  return newEntry.value.type === 'Expense' 
+    ? allPlans.filter(p => p.type === 'Expense') 
+    : allPlans.filter(p => p.type === 'Saving');
+});
+
+const availablePlansForSelect = computed(() => [
+  { id: 0, name: '不關聯計畫', color: '#94a3b8' },
+  ...filteredPlans.value
+]);
+
+const formatDateString = (date: Date | string) => {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-type AccountType = keyof typeof subAccountMap;
-const activeAccountType = ref<AccountType>('cash');
+const formattedDate = computed(() => formatDateString(selectedDate.value));
 
-// --- 2. 核心邏輯函式 ---
+const dailyTransactions = computed(() => 
+  transactionStore.transactions.filter(item => item.date === formattedDate.value)
+);
 
-// 取得計畫名稱 (排除 ID 為 0 的情況)
-const getPlanName = (id: number) => {
-  return availablePlans.value.find(p => p.id === id)?.name || '';
-};
+const dailyTotal = computed(() => 
+  dailyTransactions.value.reduce((acc, cur) => acc + cur.amount, 0)
+);
 
+const groupedTransactions = computed(() => {
+  const sorted = [...transactionStore.transactions].sort((a, b) => 
+    new Date(b.date).getTime() - new Date(a.date).getTime() || b.timestamp - a.timestamp
+  );
+  const groups: Record<string, any[]> = {};
+  sorted.forEach(tx => {
+    if (!groups[tx.date]) groups[tx.date] = [];
+    groups[tx.date].push(tx);
+  });
+  return groups;
+});
+
+// --- 4. 動作函式 ---
 const prepareNewEntry = () => {
   isEditing.value = false;
   editingId.value = null;
   amount.value = 0;
-  newEntry.value = { category: '飲食', note: '', type: 'Expense', account: '錢包', planId: 0 };
-  activeAccountType.value = 'cash';
+  newEntry.value = { 
+    date: selectedDate.value,
+    category: '飲食', note: '', type: 'Expense', 
+    accountId: accountStore.accounts[0]?.id || 0, 
+    targetAccountId: accountStore.accounts[1]?.id || 0, planId: 0 
+  };
   isAddDialogVisible.value = true;
 };
 
-const openEditDialog = (item: any) => {
+const prepareEditEntry = (item: any) => {
   isEditing.value = true;
   editingId.value = item.id;
   amount.value = Math.abs(item.amount);
+  
+  let type: 'Expense' | 'Income' | 'Transfer' = 'Expense';
+  if (item.category === '轉帳') {
+    type = 'Transfer';
+  } else {
+    type = item.amount < 0 ? 'Expense' : 'Income';
+  }
+
   newEntry.value = { 
-    category: item.category, 
-    note: item.note, 
-    type: item.type, 
-    account: item.account,
-    planId: item.planId || 0
+    date: new Date(item.date),
+    category: item.category, note: item.note, type: type, 
+    accountId: item.accountId, targetAccountId: item.targetAccountId || 0, planId: item.planId || 0 
   };
   
-  for (const [key, list] of Object.entries(subAccountMap)) {
-    if (list.includes(item.account)) {
-      activeAccountType.value = key as AccountType;
-      break;
-    }
-  }
+  const account = accountStore.accounts.find(a => a.id === item.accountId);
+  if (account) activeAccountType.value = account.type;
   isAddDialogVisible.value = true;
 };
 
-const selectAccountType = (typeId: string) => {
-  const id = typeId as AccountType;
-  activeAccountType.value = id;
-  newEntry.value.account = subAccountMap[id][0];
+const confirmDelete = () => {
+  if (editingId.value !== null) {
+    transactionStore.deleteTransaction(editingId.value);
+    isAddDialogVisible.value = false;
+    toast.add({ severity: 'info', summary: '紀錄已刪除', life: 2000 });
+  }
 };
 
 const saveTransaction = () => {
-  if (!amount.value || amount.value === 0) return;
-  const finalAmount = newEntry.value.type === 'Expense' ? -amount.value : amount.value;
-  const transactionData = {
-    id: isEditing.value ? editingId.value : Date.now(),
-    date: formattedDate.value,
-    category: newEntry.value.category,
-    type: newEntry.value.type,
-    amount: finalAmount,
-    note: newEntry.value.note,
-    account: newEntry.value.account,
-    planId: newEntry.value.planId
-  };
+  if (amount.value === null || amount.value === 0) return;
+  if (isEditing.value && editingId.value !== null) {
+    transactionStore.deleteTransaction(editingId.value);
+  }
 
-  if (isEditing.value) {
-    const idx = transactions.value.findIndex(t => t.id === editingId.value);
-    if (idx !== -1) transactions.value[idx] = transactionData as any;
+  const dateToSave = formatDateString(newEntry.value.date);
+
+  if (newEntry.value.type === 'Transfer') {
+    transactionStore.addTransaction({
+      date: dateToSave, category: '轉帳', amount: -Math.abs(amount.value),
+      note: `➜ ${getAccountName(newEntry.value.targetAccountId)} ${newEntry.value.note}`,
+      accountId: newEntry.value.accountId, planId: newEntry.value.planId || null
+    });
+    transactionStore.addTransaction({
+      date: dateToSave, category: '轉帳', amount: Math.abs(amount.value),
+      note: `來自 ${getAccountName(newEntry.value.accountId)} ${newEntry.value.note}`,
+      accountId: newEntry.value.targetAccountId, planId: newEntry.value.planId || null
+    });
   } else {
-    transactions.value.push(transactionData as any);
+    const finalAmount = newEntry.value.type === 'Expense' ? -Math.abs(amount.value) : Math.abs(amount.value);
+    transactionStore.addTransaction({
+      date: dateToSave, category: newEntry.value.category, amount: finalAmount,
+      note: newEntry.value.note, accountId: newEntry.value.accountId, 
+      planId: newEntry.value.planId === 0 ? null : newEntry.value.planId
+    });
   }
   isAddDialogVisible.value = false;
+  toast.add({ severity: 'success', summary: '儲存完成', life: 2000 });
 };
 
-// --- 3. 計算屬性 ---
-const formattedDate = computed(() => {
-  const d = selectedDate.value;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-});
-
-const dailyTransactions = computed(() => transactions.value.filter(item => item.date === formattedDate.value));
-const dailyTotal = computed(() => dailyTransactions.value.reduce((acc, cur) => acc + cur.amount, 0));
-
-const categories = [
-  { name: '飲食', icon: 'pi-utensils', color: '#dbeafe', iconColor: '#3b82f6' },
-  { name: '購物', icon: 'pi-shopping-bag', color: '#f3f4f6', iconColor: '#4b5563' },
-  { name: '交通', icon: 'pi-car', color: '#ecfdf5', iconColor: '#10b981' },
-  { name: '其他', icon: 'pi-ellipsis-h', color: '#f5f3ff', iconColor: '#8b5cf6' },
-];
+const getAccountName = (id: number) => accountStore.accounts.find(a => a.id === id)?.name || '未指定';
+const formatTime = (ts: number) => new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(ts));
 </script>
 
 <template>
-  <div class="view-wrapper">
-    <header class="view-header">
-      <h1 class="view-title">日常記帳</h1>
-      <Tag :severity="dailyTotal >= 0 ? 'success' : 'danger'" class="p-2 px-3 border-round-xl shadow-1 font-black">
-        今日損益: {{ dailyTotal.toLocaleString() }}
-      </Tag>
+  <div class="view-wrapper fade-in">
+    <Toast />
+
+    <nav class="top-nav flex align-items-center mb-4">
+      <div class="flex align-items-center gap-3">
+        <div class="user-avatar shadow-sm"><i class="pi pi-user text-xl"></i></div>
+        <span class="brand-text font-black text-xl">Fiscal Atelier</span>
+      </div>
+    </nav>
+
+    <header class="page-header flex justify-content-between align-items-center mb-5 px-2">
+      <div class="title-group">
+        <h1 class="main-title">日常記帳</h1>
+        <p class="sub-title font-bold opacity-30 uppercase tracking-widest">ATELIER LEDGER</p>
+      </div>
+      <div class="switcher-wrapper">
+        <SelectButton v-model="activeView" :options="viewOptions" class="modern-switcher" />
+      </div>
     </header>
 
-    <main class="accounting-grid">
-      <section class="calendar-section">
-        <Card class="theme-card calendar-card shadow-sm">
+    <main class="view-content">
+      <div v-if="activeView === 'Calendar'" class="calendar-view">
+        <Card class="calendar-card mb-5 shadow-sm border-none">
           <template #content>
-            <div class="flex justify-content-center overflow-hidden p-2">
-              <DatePicker v-model="selectedDate" inline class="custom-calendar-obj" />
-            </div>
+            <DatePicker v-model="selectedDate" inline class="styled-datepicker" />
           </template>
         </Card>
-      </section>
-      
-      <section class="details-section">
-        <div class="section-label mb-3 px-1 flex align-items-center">
-          <i class="pi pi-calendar-clock mr-2 opacity-50"></i>
-          <span>{{ formattedDate }} 明細</span>
-        </div>
 
-        <div class="transaction-list-container">
-          <div v-if="dailyTransactions.length === 0" class="empty-placeholder">
-            <i class="pi pi-inbox mb-3 text-4xl opacity-10"></i>
-            <p class="font-bold opacity-30">這天還沒有紀錄喔</p>
+        <div class="daily-detail-section">
+          <div class="section-header-row flex justify-content-between align-items-end mb-5 px-2">
+            <div class="flex flex-column gap-1">
+              <span class="detail-date font-black text-xl">{{ formattedDate }}</span>
+              <div class="flex align-items-center gap-2">
+                <span class="detail-count opacity-30 font-bold text-xs uppercase">{{ dailyTransactions.length }} Records</span>
+                <div class="h-px w-1rem bg-slate-200"></div>
+              </div>
+            </div>
+
+            <div class="daily-total-group text-right">
+              <span class="text-xs opacity-40 font-black uppercase block mb-1">Daily Total</span>
+              <span :class="dailyTotal >= 0 ? 'is-profit-text' : 'is-loss-text'" class="text-2xl font-black">
+                {{ dailyTotal > 0 ? '+' : '' }}{{ dailyTotal.toLocaleString() }}
+              </span>
+            </div>
           </div>
 
-          <Card v-for="item in dailyTransactions" :key="item.id" 
-                class="theme-card item-card mb-3 cursor-pointer" @click="openEditDialog(item)">
-            <template #content>
-              <div class="flex justify-content-between align-items-center">
-                <div class="flex align-items-center gap-4">
-                  <div class="category-icon-bg">
-                    {{ item.category[0] }}
+          <template v-if="dailyTransactions.length > 0">
+            <div v-for="item in dailyTransactions" :key="item.id" class="tx-white-card shadow-sm mb-3 clickable" @click="prepareEditEntry(item)">
+               <div class="flex justify-content-between align-items-center w-full">
+                  <div class="flex align-items-center gap-4">
+                    <div class="icon-box-circle"><i :class="item.amount < 0 ? 'pi pi-shopping-bag' : 'pi pi-wallet'"></i></div>
+                    <div class="text-group">
+                      <div class="text-main font-black">{{ item.note || item.category }}</div>
+                      <div class="text-sub font-bold opacity-30">{{ getAccountName(item.accountId) }}</div>
+                    </div>
                   </div>
-                  <div class="flex flex-column gap-1">
-                    <span class="font-black text-lg leading-none">{{ item.category }}</span>
-                    <span class="text-xs font-bold opacity-40 uppercase tracking-wider">
-                      {{ item.account }} 
-                      <span v-if="item.planId !== 0" class="plan-tag">
-                        | <i class="pi pi-flag-fill text-primary"></i> {{ getPlanName(item.planId) }}
-                      </span>
-                      | {{ item.note || 'No Note' }}
-                    </span>
+                  <div class="value-amount font-black" :class="{ 'is-profit-text': item.amount >= 0, 'is-loss-text': item.amount < 0 }">
+                    {{ item.amount >= 0 ? '+' : '' }}{{ item.amount.toLocaleString() }}
                   </div>
-                </div>
-                <div :class="['amount-display', item.amount >= 0 ? 'income' : 'expense']">
-                  {{ item.amount >= 0 ? '+' : '' }}{{ item.amount.toLocaleString() }}
-                </div>
-              </div>
-            </template>
-          </Card>
+               </div>
+            </div>
+          </template>
+          <div v-else class="empty-placeholder flex flex-column align-items-center justify-content-center p-6 opacity-20">
+             <i class="pi pi-receipt text-6xl mb-3"></i>
+             <span class="font-black">今日尚無記帳紀錄</span>
+          </div>
         </div>
-      </section>
+      </div>
+
+      <div v-else class="list-view px-1">
+        <template v-if="Object.keys(groupedTransactions).length > 0">
+          <div v-for="(txs, date) in groupedTransactions" :key="date" class="list-group mb-6">
+            <div class="list-date-header mb-4 px-2"><span class="font-black text-lg text-slate-400">{{ date }}</span></div>
+            <div v-for="item in txs" :key="item.id" class="tx-white-card shadow-sm mb-3 clickable" @click="prepareEditEntry(item)">
+                 <div class="flex justify-content-between align-items-center w-full">
+                  <div class="flex align-items-center gap-4">
+                    <div class="icon-box-circle small"><i :class="item.amount < 0 ? 'pi pi-shopping-bag' : 'pi pi-wallet'"></i></div>
+                    <div class="text-main font-black">{{ item.note || item.category }}</div>
+                  </div>
+                  <div class="value-amount font-black" :class="{ 'is-profit-text': item.amount >= 0, 'is-loss-text': item.amount < 0 }">
+                    {{ item.amount.toLocaleString() }}
+                  </div>
+               </div>
+            </div>
+          </div>
+        </template>
+        <div v-else class="empty-placeholder flex flex-column align-items-center justify-content-center p-8 opacity-20">
+             <i class="pi pi-inbox text-6xl mb-3"></i>
+             <span class="font-black">目前沒有任何紀錄</span>
+        </div>
+      </div>
     </main>
 
-    <button class="fab-btn" @click="prepareNewEntry">
-      <i class="pi pi-plus mr-2"></i>
-      <span class="font-black">快速記帳</span>
+    <button class="fab-atelier-modern" @click="prepareNewEntry">
+      <i class="pi pi-plus mr-3"></i><span class="font-black">快速記帳</span>
     </button>
 
     <Dialog v-model:visible="isAddDialogVisible" modal :showHeader="false" :dismissableMask="true"
             :style="{ width: '92vw', maxWidth: '420px' }" class="modern-dialog">
       <div class="transaction-panel p-5">
-        <p class="section-label text-center mb-4 uppercase tracking-widest">Quick Record</p>
+        <div class="dialog-header-group mb-5">
+          <h2 class="m-0 text-2xl font-black mb-1">{{ isEditing ? '編輯紀錄' : '快速記帳' }}</h2>
+          <DatePicker v-model="newEntry.date" dateFormat="yy/mm/dd" class="inline-date-picker" :showIcon="true" />
+        </div>
+
+        <div class="type-toggle mb-5" :class="`is-${newEntry.type.toLowerCase()}`">
+          <button @click="newEntry.type = 'Expense'" :class="{ active: newEntry.type === 'Expense' }">支出</button>
+          <button @click="newEntry.type = 'Income'" :class="{ active: newEntry.type === 'Income' }">收入</button>
+          <button @click="newEntry.type = 'Transfer'" :class="{ active: newEntry.type === 'Transfer' }">轉帳</button>
+        </div>
+
+        <div class="amount-hero mb-6">
+          <InputNumber v-model="amount" mode="decimal" inputClass="huge-input-el-dark" class="w-full" autofocus />
+        </div>
+
+        <div class="ux-account-flow mb-6">
+          <div class="ux-step-section">
+            <p class="ux-label mb-3">{{ newEntry.type === 'Transfer' ? '從哪個帳戶轉出？' : '帳戶型態' }}</p>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="cat in accountStore.categories" :key="cat.value" 
+                      @click="activeAccountType = cat.value" 
+                      class="pill-button" :class="{ active: activeAccountType === cat.value }">
+                {{ cat.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="ux-connector-line">
+            <i class="pi pi-arrow-down-right"></i>
+          </div>
+
+          <div class="ux-step-section ml-4">
+            <p class="ux-label mb-3">帳戶名稱</p>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="acc in accountStore.accounts.filter(a => a.type === activeAccountType)" 
+                      :key="acc.id" @click="newEntry.accountId = acc.id" 
+                      class="pill-button child" :class="{ active: newEntry.accountId === acc.id }">
+                {{ acc.name }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="newEntry.type === 'Transfer'" class="ux-account-flow mb-6 border-top-1 border-slate-100 pt-5 mt-2 fade-in">
+          <div class="ux-step-section">
+            <p class="ux-label mb-3">要轉入到？</p>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="cat in accountStore.categories" :key="cat.value" 
+                      @click="activeTargetAccountType = cat.value" 
+                      class="pill-button" :class="{ active: activeTargetAccountType === cat.value }">
+                {{ cat.label }}
+              </button>
+            </div>
+          </div>
+          <div class="ux-connector-line"><i class="pi pi-arrow-down-right"></i></div>
+          <div class="ux-step-section ml-4">
+            <p class="ux-label mb-3">目標帳戶</p>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="acc in accountStore.accounts.filter(a => a.type === activeTargetAccountType)" 
+                      :key="acc.id" @click="newEntry.targetAccountId = acc.id" 
+                      class="pill-button child" :class="{ active: newEntry.targetAccountId === acc.id }">
+                {{ acc.name }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ux-step-section mb-6">
+          <p class="ux-label mb-3">關聯計畫</p>
+          <div class="flex flex-wrap gap-2">
+            <button v-for="plan in availablePlansForSelect" :key="plan.id" 
+                    @click="newEntry.planId = plan.id" 
+                    class="pill-button plan-type" 
+                    :style="{ '--p-color': plan.color }"
+                    :class="{ active: newEntry.planId === plan.id }">{{ plan.name }}</button>
+          </div>
+        </div>
+
+        <InputText v-model="newEntry.note" placeholder="備註..." class="atelier-input w-full mb-6" />
         
-        <div class="toggle-wrapper mb-5" :class="newEntry.type === 'Expense' ? 'is-expense' : 'is-income'">
-          <button @click="newEntry.type = 'Expense'" class="type-tab" :class="{ 'active': newEntry.type === 'Expense' }">支出</button>
-          <button @click="newEntry.type = 'Income'" class="type-tab" :class="{ 'active': newEntry.type === 'Income' }">收入</button>
-        </div>
-
-        <div class="amount-hero text-center mb-6">
-          <div class="flex justify-content-center align-items-center gap-2">
-            <span class="text-3xl font-black opacity-30">$</span>
-            <InputNumber v-model="amount" mode="decimal" class="huge-amount-wrapper" inputClass="huge-amount-input" autofocus />
-          </div>
-        </div>
-
-        <div class="form-group mb-5">
-          <p class="section-label mb-3 px-1">Category</p>
-          <div class="flex justify-content-between">
-            <div v-for="cat in categories" :key="cat.name" class="cat-pill" 
-                 :class="{ 'selected': newEntry.category === cat.name }" @click="newEntry.category = cat.name">
-              <div class="cat-icon-box" :style="{ backgroundColor: cat.color }">
-                <i :class="['pi', cat.icon]" :style="{ color: cat.iconColor }"></i>
-              </div>
-              <span class="text-xs font-black mt-2">{{ cat.name }}</span>
+        <div class="action-footer flex flex-column gap-3">
+            <div class="flex gap-3">
+                <Button v-if="isEditing" icon="pi pi-trash" severity="danger" class="del-btn-circle" @click="confirmDelete" />
+                <Button :label="isEditing ? '儲存修改' : '確認儲存'" class="flex-1 p-3 atelier-save-btn" @click="saveTransaction" />
             </div>
-          </div>
-        </div>
-
-        <div class="form-group mb-5">
-          <p class="section-label mb-3 px-1">Payment Method</p>
-          <div class="flex gap-2 mb-3">
-            <div v-for="type in accountCategories" :key="type.id" 
-                 class="acc-selector flex-1" :class="{ 'active': activeAccountType === type.id }"
-                 @click="selectAccountType(type.id)">
-              <i :class="['pi', type.icon]" :style="{ color: activeAccountType === type.id ? 'white' : type.color }"></i>
-              <span class="text-xs font-bold mt-1">{{ type.name }}</span>
-            </div>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button v-for="sub in subAccountMap[activeAccountType]" :key="sub"
-                    @click="newEntry.account = sub"
-                    class="pill-btn" :class="{ 'active': newEntry.account === sub }">
-              {{ sub }}
-            </button>
-          </div>
-        </div>
-
-        <div class="form-group mb-5">
-          <p class="section-label mb-3 px-1">Relate to Plan</p>
-          <div class="flex flex-wrap gap-2">
-            <button v-for="plan in availablePlans" :key="plan.id"
-                    @click="newEntry.planId = plan.id"
-                    class="pill-btn plan-pill" :class="{ 'active': newEntry.planId === plan.id }">
-              <i v-if="plan.id !== 0" class="pi pi-flag-fill mr-1"></i>
-              {{ plan.name }}
-            </button>
-          </div>
-        </div>
-
-        <div class="form-group mb-6">
-          <p class="section-label mb-2 px-1">Note</p>
-          <div class="note-input-box p-3 border-round-2xl bg-black-alpha-5">
-            <InputText v-model="newEntry.note" placeholder="記錄細節..." class="w-full border-none p-0 bg-transparent font-bold" />
-          </div>
-        </div>
-
-        <div class="flex gap-2">
-           <Button v-if="isEditing" icon="pi pi-trash" severity="danger" text class="flex-1" @click="isAddDialogVisible = false" />
-           <Button :label="isEditing ? '更新這筆紀錄' : '確認儲存紀錄'" @click="saveTransaction" 
-                   :class="newEntry.type === 'Expense' ? 'btn-save-expense' : 'btn-save-income'" 
-                   class="flex-3 w-full p-3 font-black border-none shadow-lg border-round-2xl" />
+            <Button label="取消" class="p-button-text p-button-secondary font-bold opacity-40" @click="isAddDialogVisible = false" />
         </div>
       </div>
     </Dialog>
@@ -281,78 +355,47 @@ const categories = [
 </template>
 
 <style scoped>
-/* ⚡ 佈局與對稱性修正 */
-.accounting-grid { 
-  display: grid; 
-  grid-template-columns: 360px 1fr; 
-  gap: 2.5rem; 
-  width: 100%;
-}
+.view-wrapper { background: #f8fafc; min-height: 100vh; padding: 1.2rem; }
+.main-title { font-size: 1.8rem; font-weight: 950; color: #1e293b; letter-spacing: -1px; line-height: 1.1; margin: 0; }
+.sub-title { font-size: 0.75rem; color: #94a3b8; letter-spacing: 1.2px; margin-top: 2px; }
 
-@media (max-width: 992px) { 
-  .accounting-grid { grid-template-columns: 1fr; gap: 1.5rem; } 
-}
+.page-header { display: flex; justify-content: space-between; align-items: center; }
 
-/* 📅 日曆微調 */
-.calendar-card { width: 100%; }
-:deep(.custom-calendar-obj) { 
-  width: 100% !important; border: none !important; 
-  background: transparent !important; max-width: 320px;
-}
+.section-header-row { border-left: 4px solid #1e293b; padding-left: 0.8rem; }
+.detail-date { color: #1e293b; line-height: 1; white-space: nowrap; }
 
-/* 💰 金額 HERO 樣式 */
-:deep(.huge-amount-input) {
-  background: transparent !important; border: none !important;
-  font-size: 3.5rem; font-weight: 900; letter-spacing: -3px;
-  padding: 0; box-shadow: none !important; width: 100%; color: var(--app-text);
-}
+.is-profit-text { color: #10b981 !important; }
+.is-loss-text { color: #f43f5e !important; }
 
-/* 🎨 明細列表樣式 */
-.category-icon-bg { 
-  width: 48px; height: 48px; 
-  background: rgba(var(--app-primary-rgb), 0.1); 
-  color: var(--app-primary); 
-  border-radius: 14px; 
-  display: flex; justify-content: center; align-items: center; 
-  font-weight: 900; font-size: 1.2rem;
-}
+.tx-white-card { background: white; padding: 1rem 1.2rem; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.02); display: flex; }
+.clickable { cursor: pointer; transition: 0.2s; }
+.clickable:active { transform: scale(0.98); }
 
-.plan-tag { color: var(--app-primary); margin: 0 4px; }
-.amount-display { font-weight: 950; font-size: 1.4rem; }
-.income { color: #10b981; }
-.expense { color: #f43f5e; }
+.modern-switcher :deep(.p-button) { border-radius: 14px; border: none; background: #f1f5f9; color: #94a3b8; font-weight: 900; padding: 0.5rem 1rem; font-size: 0.85rem; }
+.modern-switcher :deep(.p-highlight) { background: white !important; color: #1e293b !important; }
 
-/* ➕ FAB 懸浮按鈕 */
-.fab-btn { 
-  position: fixed; bottom: 100px; right: 25px; 
-  background: var(--app-primary); 
-  border: none; padding: 1rem 1.8rem; border-radius: 20px; 
-  color: white; z-index: 100; 
-  box-shadow: 0 10px 25px rgba(var(--app-primary-rgb), 0.3);
-  display: flex; align-items: center; transition: 0.2s;
-}
-.fab-btn:active { transform: scale(0.95); }
+/* 🌟 修正：提高按鈕位址 */
+.fab-atelier-modern { position: fixed; bottom: 100px; right: 20px; background: #003d4d; color: white; border: none; padding: 1rem 1.8rem; border-radius: 35px; z-index: 1000; box-shadow: 0 8px 25px rgba(0,61,77,0.3); cursor: pointer; }
 
-/* 彈窗內組件 */
-.toggle-wrapper { display: flex; padding: 4px; border-radius: 18px; background: rgba(0,0,0,0.05); }
-.type-tab { flex: 1; border: none; padding: 0.7rem; border-radius: 14px; font-weight: 900; cursor: pointer; background: transparent; color: #94a3b8; transition: 0.3s; }
-.type-tab.active { color: white; }
-.is-expense .active { background: #f43f5e; box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3); }
-.is-income .active { background: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+.atelier-save-btn { background: #003d4d !important; color: white; border-radius: 18px !important; font-weight: 950; }
+.del-btn-circle { background: #fee2e2 !important; border-radius: 18px !important; color: #ef4444 !important; width: 54px; height: 54px; }
 
-.cat-pill { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: 0.2s; }
-.cat-icon-box { width: 54px; height: 54px; border-radius: 18px; display: flex; justify-content: center; align-items: center; font-size: 1.4rem; opacity: 0.4; }
-.cat-pill.selected .cat-icon-box { transform: scale(1.1); opacity: 1; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+.type-toggle { display: flex; padding: 4px; border-radius: 15px; background: rgba(0,0,0,0.05); }
+.type-toggle button { flex: 1; border: none; padding: 0.7rem; border-radius: 12px; font-weight: 900; cursor: pointer; transition: 0.3s; color: #94a3b8; }
+.type-toggle .active { background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
 
-.acc-selector { display: flex; flex-direction: column; align-items: center; padding: 12px; border-radius: 16px; background: rgba(0,0,0,0.03); border: 1.5px solid transparent; cursor: pointer; transition: 0.2s; }
-.acc-selector.active { background: var(--app-primary); color: white; border-color: var(--app-primary); }
+.is-expense .active { color: #f43f5e !important; }
+.is-income .active { color: #10b981 !important; }
+.is-transfer .active { color: #3b82f6 !important; }
 
-.pill-btn { padding: 8px 16px; border-radius: 14px; border: 1px solid var(--app-footer-border); background: var(--app-footer-bg); font-size: 0.75rem; font-weight: 800; color: var(--app-text); cursor: pointer; transition: 0.2s; }
-.pill-btn.active { background: var(--app-text); color: var(--app-bg); border-color: var(--app-text); }
-.plan-pill.active { background: var(--app-primary); color: white; border-color: var(--app-primary); }
+.ux-connector-line { padding: 0.5rem 0 0.5rem 1.2rem; color: #e2e8f0; font-size: 0.7rem; }
+.pill-button { padding: 8px 15px; border-radius: 14px; border: 1.5px solid rgba(0,0,0,0.03); background: white; font-weight: 800; font-size: 0.8rem; cursor: pointer; }
+.pill-button.active { background: #0f172a; color: white; }
+.pill-button.child.active { background: #003d4d !important; }
 
-.btn-save-expense { background: #f43f5e !important; color: white; }
-.btn-save-income { background: #10b981 !important; color: white; }
+.atelier-input { background: rgba(0,0,0,0.04) !important; border: none !important; border-radius: 14px !important; padding: 0.8rem !important; }
+:deep(.huge-input-el-dark) { width: 100% !important; border: none !important; font-size: 3.5rem !important; font-weight: 950 !important; text-align: center !important; background: transparent !important; color: #1e293b !important; }
 
-.empty-placeholder { text-align: center; padding: 5rem 0; }
+.fade-in { animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 </style>
